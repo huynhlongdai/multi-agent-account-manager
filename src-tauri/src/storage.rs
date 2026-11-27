@@ -532,6 +532,12 @@ fn migrate_from_value(root: Value) -> Result<(AccountsStoreFile, bool), String> 
         cookie_session_only = false;
       }
 
+      let notes = item_obj
+        .get("notes")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .filter(|s| !s.trim().is_empty());
+
       accounts.push(AccountRecord {
         provider_id,
         uuid,
@@ -547,6 +553,7 @@ fn migrate_from_value(root: Value) -> Result<(AccountsStoreFile, bool), String> 
         auth_state,
         cookie_expires_at_ms,
         cookie_session_only,
+        notes,
       });
     }
   }
