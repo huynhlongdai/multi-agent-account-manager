@@ -4892,6 +4892,7 @@ impl SessionManager {
     raw_proxy_url: Option<&str>,
     raw_timezone: Option<&str>,
     raw_cookies: Option<&str>,
+    raw_notes: Option<&str>,
   ) -> Result<ManagerSnapshot, String> {
     let provider_id = ProviderId::parse(raw_provider).ok_or_else(|| "无效的服务标识".to_string())?;
     let trimmed = raw_alias.trim();
@@ -4900,6 +4901,9 @@ impl SessionManager {
     } else {
       (trimmed.to_string(), false)
     };
+    let notes = raw_notes
+      .map(|s| s.trim().to_string())
+      .filter(|s| !s.is_empty());
     let proxy_url = platform::parse_account_proxy(raw_proxy_url.unwrap_or_default())?
       .map(|url| platform::format_account_proxy(&url));
     let timezone = platform::parse_account_timezone(raw_timezone.unwrap_or_default())?;
@@ -4971,6 +4975,7 @@ impl SessionManager {
         auth_state: initial_auth,
         cookie_expires_at_ms: None,
         cookie_session_only: false,
+        notes,
       });
       if let Err(err) = save_store_atomic(&locked.store_path, &locked.store) {
         locked.store.accounts.pop();
@@ -5049,12 +5054,14 @@ impl SessionManager {
     raw_alias: &str,
     raw_proxy_url: Option<&str>,
     raw_timezone: Option<&str>,
+    raw_notes: Option<&str>,
   ) -> Result<ManagerSnapshot, String> {
     let provider_id = ProviderId::parse(raw_provider).ok_or_else(|| "无效的服务标识".to_string())?;
     let uuid = normalize_uuid(raw_uuid).ok_or_else(|| "无效的账号 UUID".to_string())?;
     let alias = raw_alias.trim();
     if alias.is_empty()
       && raw_timezone.is_none()
+      && raw_notes.is_none()
       && (raw_proxy_url.is_none() || !platform::SUPPORTS_ACCOUNT_PROXY)
     {
       return Err("账号别名不能为空".to_string());
@@ -5081,6 +5088,14 @@ impl SessionManager {
     }
     if let Some(tz) = timezone_update {
       updated.timezone = tz;
+    }
+    if let Some(n) = raw_notes {
+      let trimmed = n.trim();
+      updated.notes = if trimmed.is_empty() {
+        None
+      } else {
+        Some(n.to_string())
+      };
     }
     let proxy_changed = updated.proxy_url != locked.store.accounts[index].proxy_url;
     let timezone_changed = updated.timezone != locked.store.accounts[index].timezone;
@@ -5705,6 +5720,7 @@ impl SessionManager {
         None,
         None,
         Some(raw_cookies),
+        None,
       )
       .await?;
 
@@ -14010,6 +14026,7 @@ mod tests {
       auth_state: AuthState::Unknown,
       cookie_expires_at_ms: None,
       cookie_session_only: false,
+      notes: None,
     }
   }
 

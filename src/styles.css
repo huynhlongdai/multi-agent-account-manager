@@ -673,6 +673,28 @@ body,
   border-color: #bcd9ff;
 }
 
+.notes-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+  flex-shrink: 0;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.account-row.active .notes-pill {
+  background: #fde68a;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
 .proxy-pill {
   display: inline-flex;
   align-items: center;
@@ -688,7 +710,29 @@ body,
   white-space: nowrap;
 }
 
-.account-row.active .proxy-pill {
+.account-row.active .notes-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+  flex-shrink: 0;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.account-row.active .notes-pill {
+  background: #fde68a;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.proxy-pill {
   background: #cffafe;
   color: #155e75;
   border-color: #67e8f9;
@@ -2173,7 +2217,29 @@ body,
   color: #93c5fd;
 }
 
-:root[data-theme="dark"] .proxy-pill {
+:root[data-theme="dark"] .notes-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+  flex-shrink: 0;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.account-row.active .notes-pill {
+  background: #fde68a;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.proxy-pill {
   background: rgba(6, 182, 212, 0.16);
   border-color: rgba(34, 211, 238, 0.35);
   color: #67e8f9;

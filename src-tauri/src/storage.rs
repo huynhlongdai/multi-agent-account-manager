@@ -155,6 +155,8 @@ pub struct AccountRecord {
   pub cookie_expires_at_ms: Option<u64>,
   #[serde(default)]
   pub cookie_session_only: bool,
+  #[serde(default)]
+  pub notes: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

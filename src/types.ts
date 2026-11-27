@@ -70,6 +70,7 @@ export interface AccountRecord {
   authState: AuthState;
   cookieExpiresAtMs: number | null;
   cookieSessionOnly: boolean;
+  notes?: string | null;
 }
 
 export interface ConflictItem {

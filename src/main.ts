@@ -35,6 +35,7 @@ type AccountDraft = {
   draft: string;
   proxyDraft: string;
   timezoneDraft: string;
+  notesDraft?: string;
   cookieDraft?: string;
   cookieImporting?: boolean;
   error?: string;
@@ -1636,6 +1637,9 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
             ).join("")}
           </div>
           <div class="modal-hint">${platform === "windows" ? "Isolated per account via native WebView2; leave empty to use system timezone." : "Injected into isolated pages before document load; leave empty for system timezone."}</div>
+          <label class="modal-desc" for="modal-notes-input">Account Notes & Credentials (e.g. Email, Password, Remarks)</label>
+          <textarea id="modal-notes-input" class="modal-textarea compact-cookie-textarea" rows="2" placeholder="e.g. Email: user@example.com | Pass: 123456 | Remarks..." ${saving ? "disabled" : ""}>${escapeHtml(modal.notesDraft ?? "")}</textarea>
+          <div class="modal-hint">Saved securely on your local device. Great for keeping email, login credentials, or recovery keys handy.</div>
           ${cookieInfo ? `<div class="cookie-detail-box ${cookieInfo.tone}" title="${escapeHtml(cookieInfo.tooltip)}"><span class="cookie-expiry-dot"></span><span>${escapeHtml(cookieInfo.detailText)}</span></div>` : ""}
           <div class="cookie-import-section">
             <label class="modal-desc" for="modal-cookie-import-input">${creating ? "Import Cookies (Optional, paste exported cookies from Chrome/browser)" : "Import Cookies (Paste exported cookies from Chrome/browser)"}</label>
@@ -2286,6 +2290,7 @@ function renderMiddleContent(state: ManagerSnapshot, provider: ProviderInfo): st
                   ${proxyBadgeHtml}
                   ${timezoneBadgeHtml}
                   ${alertBadgeHtml}
+                  ${acc.notes ? `<span class="notes-pill" title="${escapeHtml(acc.notes)}">📝 Note</span>` : ""}
                 </div>
                 ${showManualAliasHint ? `<div class="alias-manual-hint"><span>Email not detected</span><button class="inline-rename-link" data-rename-uuid="${escapeHtml(acc.uuid)}" type="button">Rename</button></div>` : ""}
                 ${compactSubHtml}
@@ -4565,7 +4570,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
   });
 
   const openAddModal = async () => {
-    await setModal({ kind: "add", providerId: provider.id, draft: "", proxyDraft: "", timezoneDraft: "", cookieDraft: "" });
+    await setModal({ kind: "add", providerId: provider.id, draft: "", proxyDraft: "", timezoneDraft: "", notesDraft: "", cookieDraft: "" });
   };
   document.querySelector("#add-account-btn")?.addEventListener("click", openAddModal);
   document.querySelector("#stage-add-btn")?.addEventListener("click", openAddModal);
@@ -4712,6 +4717,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
           draft: acc.autoAlias ? "" : acc.alias,
           proxyDraft: acc.proxyUrl ?? "",
           timezoneDraft: acc.timezone ?? "",
+          notesDraft: acc.notes ?? "",
           cookieDraft: "",
         });
       }
@@ -5473,8 +5479,8 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
   });
 
   document
-    .querySelectorAll<HTMLInputElement>(
-      "#modal-alias-input, #modal-proxy-input, #modal-timezone-input, #modal-shortcut-input, #modal-group-name-input"
+    .querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+      "#modal-alias-input, #modal-proxy-input, #modal-timezone-input, #modal-notes-input, #modal-shortcut-input, #modal-group-name-input"
     )
     .forEach((input) => {
       input.addEventListener("input", () => {
@@ -5485,6 +5491,8 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
             document.querySelector("#proxy-test-result")?.remove();
           } else if (input.id === "modal-timezone-input") {
             modal.timezoneDraft = input.value;
+          } else if (input.id === "modal-notes-input") {
+            modal.notesDraft = input.value;
           } else {
             modal.draft = input.value;
           }
@@ -5506,8 +5514,9 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
           }
         }
       });
-      input.addEventListener("keydown", async (ev) => {
-        if (ev.key === "Enter" && !ev.isComposing) {
+      input.addEventListener("keydown", async (e: Event) => {
+        const ev = e as KeyboardEvent;
+        if (ev.key === "Enter" && !ev.isComposing && input.tagName !== "TEXTAREA") {
           ev.preventDefault();
           document.querySelector<HTMLButtonElement>("#modal-confirm-btn")?.click();
         } else if (ev.key === "Escape") {
@@ -5567,6 +5576,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
       let saved = false;
       try {
         const rawCookies = (currentModal.cookieDraft ?? "").trim();
+        const notes = currentModal.notesDraft?.trim() || undefined;
         saved = currentModal.kind === "add"
           ? await callCommand("add_account", {
             providerId: currentModal.providerId,
@@ -5574,6 +5584,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
             proxyUrl,
             timezone,
             rawCookies: rawCookies || undefined,
+            notes,
           })
           : await callCommand("rename_account", {
             providerId: currentModal.account.providerId,
@@ -5581,6 +5592,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
             alias,
             proxyUrl,
             timezone,
+            notes,
           });
       } finally {
         currentModal.saving = false;

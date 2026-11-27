@@ -51,6 +51,7 @@ async fn add_account(
   proxy_url: Option<String>,
   timezone: Option<String>,
   raw_cookies: Option<String>,
+  notes: Option<String>,
 ) -> Result<ManagerSnapshot, String> {
   mgr
     .add_account(
@@ -60,6 +61,7 @@ async fn add_account(
       proxy_url.as_deref(),
       timezone.as_deref(),
       raw_cookies.as_deref(),
+      notes.as_deref(),
     )
     .await
 }
@@ -73,6 +75,7 @@ async fn rename_account(
   alias: String,
   proxy_url: Option<String>,
   timezone: Option<String>,
+  notes: Option<String>,
 ) -> Result<ManagerSnapshot, String> {
   mgr
     .update_account_settings(
@@ -82,6 +85,7 @@ async fn rename_account(
       &alias,
       proxy_url.as_deref(),
       timezone.as_deref(),
+      notes.as_deref(),
     )
     .await
 }
