@@ -89,7 +89,7 @@ pub fn builtin_provider_specs() -> Vec<ProviderSpec> {
         name: "Muse · Meta".to_string(),
         short_name: "Muse".to_string(),
         enabled: true,
-        status_text: "已启用".to_string(),
+        status_text: "Enabled".to_string(),
         entry_url: "https://muse.ai/".to_string(),
         homepage_url: "https://muse.ai/".to_string(),
         callback_origins: vec![
@@ -118,7 +118,7 @@ pub fn builtin_provider_specs() -> Vec<ProviderSpec> {
         name: "Hark".to_string(),
         short_name: "Hark".to_string(),
         enabled: true,
-        status_text: "已启用".to_string(),
+        status_text: "Enabled".to_string(),
         entry_url: "https://app.hark.com/".to_string(),
         homepage_url: "https://hark.com/".to_string(),
         callback_origins: vec![

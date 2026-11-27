@@ -709,9 +709,9 @@ pub fn run() {
         use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
         use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
-        let toggle_item = MenuItem::with_id(app, "tray_toggle", "显示 / 隐藏窗口", true, None::<&str>)?;
+        let toggle_item = MenuItem::with_id(app, "tray_toggle", "Show / Hide Window", true, None::<&str>)?;
         let sep_item = PredefinedMenuItem::separator(app)?;
-        let quit_item = MenuItem::with_id(app, "tray_quit", "退出叠号", true, None::<&str>)?;
+        let quit_item = MenuItem::with_id(app, "tray_quit", "Quit Account Manager", true, None::<&str>)?;
         let tray_menu = Menu::with_items(app, &[&toggle_item, &sep_item, &quit_item])?;
         let tray_icon = match app.default_window_icon().cloned() {
           Some(icon) => icon,
@@ -720,7 +720,7 @@ pub fn run() {
         let _tray = TrayIconBuilder::with_id("main-tray")
           .icon(tray_icon)
           .menu(&tray_menu)
-          .tooltip("叠号 · AI 助手账号切换器")
+          .tooltip("Multi-Agent Account Manager")
           .show_menu_on_left_click(false)
           .on_menu_event(|app_handle, event| match event.id().as_ref() {
             "tray_toggle" => SessionManager::toggle_main_window(app_handle),

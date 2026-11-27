@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account Manager Cookie Exporter</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="card">
+    <header class="header">
+      <div class="logo-box">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"></path>
+          <path d="M8.5 8.5v.01"></path>
+          <path d="M11.5 15.5v.01"></path>
+          <path d="M15.5 11.5v.01"></path>
+        </svg>
+      </div>
+      <div class="title-wrap">
+        <h1 class="title">Cookie Exporter</h1>
+        <p class="subtitle">For Multi-Agent Account Manager</p>
+      </div>
+    </header>
+
+    <div class="site-info">
+      <div class="site-row">
+        <span class="label">Target Service:</span>
+        <span id="service-badge" class="badge">Detecting...</span>
+      </div>
+      <div class="site-row">
+        <span class="label">Tab URL:</span>
+        <span id="tab-url" class="val-url">...</span>
+      </div>
+      <div class="site-row">
+        <span class="label">Cookies Found:</span>
+        <span id="cookie-count" class="badge count">0</span>
+      </div>
+    </div>
+
+    <div id="domains-list" class="domains-box">
+      <!-- Included domains will appear here -->
+    </div>
+
+    <div class="actions">
+      <button id="copy-btn" class="btn primary" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <span>Copy for Account Manager</span>
+      </button>
+
+      <button id="download-btn" class="btn secondary" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span>Export .json File</span>
+      </button>
+    </div>
+
+    <div id="status-toast" class="toast" hidden></div>
+
+    <footer class="footer">
+      <p class="hint">💡 Click <b>Copy</b>, then in Account Manager open <b>Account Settings → Import Cookie</b> and paste.</p>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

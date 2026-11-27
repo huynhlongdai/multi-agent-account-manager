@@ -145,7 +145,7 @@ pub fn builtin_site_adapters() -> Vec<SiteAdapterConfig> {
     },
     SiteAdapterConfig {
       id: "generic".to_string(),
-      name: "通用适配兜底".to_string(),
+      name: "Generic Fallback".to_string(),
       host_patterns: svec(&["*"]),
       composer_selectors: svec(&[
         "textarea",

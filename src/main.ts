@@ -45,13 +45,13 @@ type AccountDraft = {
 };
 
 const TIMEZONE_PRESETS: Array<{ label: string; value: string }> = [
-  { label: "跟随系统", value: "" },
-  { label: "纽约", value: "America/New_York" },
-  { label: "洛杉矶", value: "America/Los_Angeles" },
-  { label: "伦敦", value: "Europe/London" },
-  { label: "东京", value: "Asia/Tokyo" },
-  { label: "新加坡", value: "Asia/Singapore" },
-  { label: "上海", value: "Asia/Shanghai" },
+  { label: "System Default", value: "" },
+  { label: "New York", value: "America/New_York" },
+  { label: "Los Angeles", value: "America/Los_Angeles" },
+  { label: "London", value: "Europe/London" },
+  { label: "Tokyo", value: "Asia/Tokyo" },
+  { label: "Singapore", value: "Asia/Singapore" },
+  { label: "Shanghai", value: "Asia/Shanghai" },
   { label: "UTC", value: "UTC" },
 ];
 
@@ -153,19 +153,19 @@ const PROVIDER_LOGOS: Record<string, ProviderLogoSpec> = {
 
 const GROUP_SKILL_PRESETS: Array<Omit<GroupSharedSkill, "id" | "enabled">> = [
   {
-    name: "极致简洁中文",
-    description: "约束各成员直接给结论和关键点，禁止寒暄和铺垫。",
-    content: "统一使用简体中文回复；直接给结论、关键依据和可执行方案，禁止客套和冗余铺垫。",
+    name: "Concise & Direct",
+    description: "Instruct members to provide conclusions directly without pleasantries.",
+    content: "Provide conclusions, key rationale, and actionable plans directly. Avoid pleasantries and filler.",
   },
   {
-    name: "架构与风险评审",
-    description: "从稳定性、边界情况、安全性和性能四个维度输出意见。",
-    content: "分析技术方案时优先检查边界情况、并发竞争、权限安全与资源占用，明确指出取舍与潜在风险。",
+    name: "Architecture & Risk Review",
+    description: "Evaluate stability, edge cases, security, and performance.",
+    content: "Analyze edge cases, concurrency, security, and resource usage. Clearly highlight trade-offs and potential risks.",
   },
   {
-    name: "交叉事实核查",
-    description: "要求先指出前序发言或前提中的漏洞，再补充新结论。",
-    content: "若共享上下文或前序成员发言存在矛盾、假设漏洞或遗漏，请先指出修正，再给出补充判断。",
+    name: "Cross-Fact Checking",
+    description: "Point out flaws or omissions in prior messages before adding conclusions.",
+    content: "If prior messages contain contradictions, flawed assumptions, or omissions, correct them first before adding insights.",
   },
 ];
 
@@ -197,7 +197,7 @@ const EXTERNAL_AGENT_PRESETS: Array<{
     args: "",
   },
   {
-    label: "Ollama 本地",
+    label: "Local Ollama",
     kind: "openai_api",
     name: "Ollama-Qwen",
     baseUrl: "http://127.0.0.1:11434/v1",
@@ -271,9 +271,9 @@ function applyTheme(): void {
 }
 
 function themeLabel(mode: ThemeMode): string {
-  if (mode === "dark") return "深色";
-  if (mode === "light") return "浅色";
-  return "跟随";
+  if (mode === "dark") return "Dark";
+  if (mode === "light") return "Light";
+  return "System";
 }
 
 function themeIcon(mode: ThemeMode): string {
@@ -492,7 +492,7 @@ function resolveMemberCategory(
     return { id: "api", label: "OpenAI API" };
   }
   if (key.providerId === "cli") {
-    return { id: "cli", label: "本地 CLI" };
+    return { id: "cli", label: "Local CLI" };
   }
   const pInfo = state.providers.find((p) => p.id === key.providerId);
   return {
@@ -664,29 +664,29 @@ function resolveQuotaState(acc: AccountRecord): {
 
     if (extraIsCap) {
       if (planDepleted) {
-        return { status: "critical", label: "日满", extraDepleted };
+        return { status: "critical", label: "Daily Cap", extraDepleted };
       }
       if (extraDepleted) {
-        return { status: "critical", label: "月满", extraDepleted };
+        return { status: "critical", label: "Monthly Cap", extraDepleted };
       }
       if (planLow || extraLow) {
-        return { status: "low", label: "偏低", extraDepleted };
+        return { status: "low", label: "Low", extraDepleted };
       }
       return { status: "normal", label: "", extraDepleted };
     }
 
     if (planDepleted) {
       if (!hasExtra || extraDepleted) {
-        return { status: "critical", label: "用尽", extraDepleted };
+        return { status: "critical", label: "Depleted", extraDepleted };
       }
       if (extraLow) {
-        return { status: "low", label: "偏低", extraDepleted };
+        return { status: "low", label: "Low", extraDepleted };
       }
-      return { status: "extra", label: "用额外", extraDepleted };
+      return { status: "extra", label: "Extra Used", extraDepleted };
     }
     if (planLow) {
       if (!hasExtra || extraDepleted) {
-        return { status: "low", label: "偏低", extraDepleted };
+        return { status: "low", label: "Low", extraDepleted };
       }
       return { status: "normal", label: "", extraDepleted };
     }
@@ -694,13 +694,13 @@ function resolveQuotaState(acc: AccountRecord): {
   }
 
   if (acc.quotaPercent === 0 || Boolean(acc.quotaText?.includes("用尽"))) {
-    return { status: "critical", label: "用尽", extraDepleted: false };
+    return { status: "critical", label: "Depleted", extraDepleted: false };
   }
   if (
     (typeof acc.quotaPercent === "number" && acc.quotaPercent <= 15) ||
     Boolean(acc.quotaText?.includes("偏低"))
   ) {
-    return { status: "low", label: "偏低", extraDepleted: false };
+    return { status: "low", label: "Low", extraDepleted: false };
   }
   return { status: "normal", label: "", extraDepleted: false };
 }
@@ -768,7 +768,7 @@ function formatShortResetText(raw: string | null): string {
   const m = clean.match(/^(?:每周限额将在|周限额重置时间[:：]?|将在)\s*(.+?)\s*$/);
   if (m && m[1]) {
     const inner = m[1].trim();
-    return inner.endsWith("重置") ? inner : `${inner}重置`;
+    return inner.endsWith("reset") ? inner : `${inner} reset`;
   }
   return clean;
 }
@@ -784,9 +784,9 @@ function formatShortExtraText(
   ) {
     return null;
   }
-  const prefix = detail.extraLabel && /月|monthly/i.test(detail.extraLabel) ? "月" : "额外";
+  const prefix = detail.extraLabel && /月|monthly/i.test(detail.extraLabel) ? "Mo" : "Extra";
   if (extraDepleted) {
-    return `${prefix} 100% · 已耗尽`;
+    return `${prefix} 100% · Depleted`;
   }
   const parsed = splitQuotaValue(detail.extraValue ?? "");
   const pctPart =
@@ -809,7 +809,7 @@ function formatShortExtraText(
   if (pctPart) {
     return `${prefix} ${pctPart}`;
   }
-  return detail.extraLabel ?? "额外额度";
+  return detail.extraLabel ?? "Extra Quota";
 }
 
 type CookieExpiryTone = "normal" | "warn" | "critical" | "expired" | "session";
@@ -836,9 +836,9 @@ function formatCookieExpiry(acc: AccountRecord): CookieExpiryDisplay | null {
     if (diffMs <= 0) {
       return {
         tone: "expired",
-        shortText: "Cookie 已过期",
-        detailText: `Cookie 已于 ${absStr} 过期（需重新登录或刷新）`,
-        tooltip: `Cookie 过期时间：${absStr}`,
+        shortText: "Cookie Expired",
+        detailText: `Cookie expired on ${absStr} (re-login or refresh required)`,
+        tooltip: `Cookie expiration: ${absStr}`,
       };
     }
 
@@ -848,21 +848,21 @@ function formatCookieExpiry(acc: AccountRecord): CookieExpiryDisplay | null {
 
     const shortText =
       days >= 365
-        ? `Cookie 约 ${(days / 365).toFixed(1).replace(/\.0$/, "")} 年`
+        ? `Cookie ~${(days / 365).toFixed(1).replace(/\.0$/, "")} yr`
         : days >= 1
-          ? `Cookie 剩 ${days} 天`
+          ? `Cookie ${days}d left`
           : hours >= 1
-            ? `Cookie 剩 ${hours} 小时`
-            : `Cookie 剩 ${mins} 分钟`;
+            ? `Cookie ${hours}h left`
+            : `Cookie ${mins}m left`;
 
     const fullRem =
       days >= 1 && hours > 0
-        ? `${days} 天 ${hours} 小时`
+        ? `${days}d ${hours}h`
         : days >= 1
-          ? `${days} 天`
+          ? `${days}d`
           : hours >= 1
-            ? `${hours} 小时 ${mins} 分钟`
-            : `${mins} 分钟`;
+            ? `${hours}h ${mins}m`
+            : `${mins}m`;
 
     const tone: CookieExpiryTone =
       diffMs <= 24 * 3_600_000
@@ -874,17 +874,17 @@ function formatCookieExpiry(acc: AccountRecord): CookieExpiryDisplay | null {
     return {
       tone,
       shortText,
-      detailText: `Cookie 有效期至 ${absStr}（剩余 ${fullRem}）`,
-      tooltip: `Cookie 有效期至 ${absStr}`,
+      detailText: `Cookie valid until ${absStr} (${fullRem} remaining)`,
+      tooltip: `Cookie valid until ${absStr}`,
     };
   }
 
   if (acc.cookieSessionOnly) {
     return {
       tone: "session",
-      shortText: "仅本次会话有效",
-      detailText: "会话级 Cookie（关闭应用后可能需重新登录）",
-      tooltip: "浏览器会话级 Cookie，未设置固定过期时间",
+      shortText: "Session Only",
+      detailText: "Session cookie (re-login may be needed on restart)",
+      tooltip: "Browser session cookie, no fixed expiry date",
     };
   }
 
@@ -1024,10 +1024,10 @@ function formatBytes(bytes: number): string {
 }
 
 function formatProgressSummary(evt: UpdateProgressEvent): string {
-  if (evt.stage === "verifying") return "校验中";
-  if (evt.stage === "installing") return "正在替换";
-  if (evt.stage === "ready") return "完成";
-  if (evt.stage === "needs_permission") return "待授权";
+  if (evt.stage === "verifying") return "Verifying";
+  if (evt.stage === "installing") return "Installing";
+  if (evt.stage === "ready") return "Done";
+  if (evt.stage === "needs_permission") return "Needs Auth";
   const pct = typeof evt.percent === "number" ? `${evt.percent}%` : "";
   const transferred = evt.total
     ? `${formatBytes(evt.downloaded)} / ${formatBytes(evt.total)}`
@@ -1096,7 +1096,7 @@ async function runDownloadAndInstall(): Promise<void> {
     downloaded: 0,
     total: res.size,
     percent: 0,
-    message: "正在准备下载...",
+    message: "Preparing download...",
   };
   rerenderPreservingScroll();
   try {
@@ -1223,22 +1223,22 @@ function renderUpdateModal(): string {
   const curVer = res ? res.currentVersion : "...";
   const hasUpdate = Boolean(res?.hasUpdate);
   const title = hasUpdate
-    ? `发现新版本 v${escapeHtml(res!.latestVersion)}`
-    : "检查更新";
+    ? `New Version Available v${escapeHtml(res!.latestVersion)}`
+    : "Check for Updates";
 
   const versionRow = res
     ? `
       <div class="update-version-row">
-        <span class="update-version-pill">当前 v${escapeHtml(curVer)}</span>
+        <span class="update-version-pill">Current v${escapeHtml(curVer)}</span>
         ${
           hasUpdate
-            ? `<span>→</span><span class="update-version-pill latest">最新 v${escapeHtml(res.latestVersion)}</span>`
+            ? `<span>→</span><span class="update-version-pill latest">Latest v${escapeHtml(res.latestVersion)}</span>`
             : ""
         }
         ${res.size ? `<span class="update-size-label">${escapeHtml(formatBytes(res.size))}</span>` : ""}
       </div>
     `
-    : `<div class="modal-desc">正在连接 GitHub Releases 检查版本信息...</div>`;
+    : `<div class="modal-desc">Checking GitHub Releases for version info...</div>`;
 
   let bodyHtml = "";
   if (updateState.checking && !res) {
@@ -1250,12 +1250,12 @@ function renderUpdateModal(): string {
   } else if (res) {
     const noteText = res.releaseNotes.trim();
     if (hasUpdate) {
-      bodyHtml += `<div class="update-notes">${escapeHtml(noteText || "包含稳定性改进与问题修复。")}</div>`;
+      bodyHtml += `<div class="update-notes">${escapeHtml(noteText || "Includes stability improvements and bug fixes.")}</div>`;
       if (!res.downloadUrl) {
-        bodyHtml += `<div class="modal-desc">当前发布尚未包含本平台自动安装包，请点击「发布页」手动下载。</div>`;
+        bodyHtml += `<div class="modal-desc">Auto-installer not yet available for this platform. Please visit the Release Page to download manually.</div>`;
       }
     } else {
-      bodyHtml += `<div class="modal-desc">${escapeHtml(noteText || "当前已是最新版本。")}</div>`;
+      bodyHtml += `<div class="modal-desc">${escapeHtml(noteText || "You are on the latest version.")}</div>`;
     }
   }
 
@@ -1298,19 +1298,19 @@ function renderUpdateModal(): string {
   const primaryBtn = canInstall
     ? `<button id="update-install-btn" class="btn primary" type="button" ${disablePrimary ? "disabled" : ""}>${
         updateState.installing
-          ? "更新中..."
+          ? "Updating..."
           : updateState.outcomeStatus === "needs_permission"
-            ? "已授权，继续安装"
+            ? "Authorized, continue install"
             : snapshot?.platform === "ios"
-              ? "前往下载 IPA"
-              : "立即下载并更新"
+              ? "Download IPA"
+              : "Download & Update Now"
       }</button>`
     : `<button id="update-recheck-btn" class="btn primary" type="button" ${disablePrimary ? "disabled" : ""}>${
-        updateState.checking ? "检查中..." : "重新检查"
+        updateState.checking ? "Checking..." : "Check Again"
       }</button>`;
 
   const pageBtn = res?.releasePageUrl
-    ? `<button id="update-open-page-btn" class="btn" type="button">发布页</button>`
+    ? `<button id="update-open-page-btn" class="btn" type="button">Release Page</button>`
     : "";
 
   return `
@@ -1320,7 +1320,7 @@ function renderUpdateModal(): string {
         ${versionRow}
         ${bodyHtml}
         <div class="modal-footer">
-          <button id="modal-cancel-btn" class="btn" type="button" ${updateState.installing ? "disabled" : ""}>关闭</button>
+          <button id="modal-cancel-btn" class="btn" type="button" ${updateState.installing ? "disabled" : ""}>Close</button>
           ${pageBtn}
           ${primaryBtn}
         </div>
@@ -1340,12 +1340,12 @@ function formatGroupPickerHint(
   hasPickerContent: boolean
 ): string {
   if (eligibleCount === 0 && !hasPickerContent) {
-    return "暂无可用成员，请先登录网页账号或添加 API / CLI 成员。";
+    return "No available members. Please log in or add an API / CLI member.";
   }
   if (ineligibleCount > 0) {
-    return `已自动过滤 ${ineligibleCount} 个未登录或登录失效网页账号（已选 ${selectedCount}/30）。`;
+    return `Filtered ${ineligibleCount} logged-out account(s) (Selected ${selectedCount}/30).`;
   }
-  return `支持网页账号与 API / CLI 混合协同（已选 ${selectedCount}/30）。`;
+  return `Collaborate with Web Accounts & API / CLI (Selected ${selectedCount}/30).`;
 }
 
 function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
@@ -1373,25 +1373,25 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
       modal.tab === "lan"
         ? `
           <div class="sync-section">
-            <div class="sync-section-title">作为发送端（生成临时加密共享）</div>
+            <div class="sync-section-title">Sender Mode (Generate Encrypted Share)</div>
             <label class="sync-relay-toggle">
               <input id="sync-relay-toggle" type="checkbox" ${modal.relayEnabled ? "checked" : ""} ${busyAny ? "disabled" : ""} />
-              <span>启用官网 / Cloudflare 加密中转通道（默认关闭，跨网或开代理时可选）</span>
+              <span>Enable Cloudflare Relay Channel (Disabled by default, useful across networks or with proxies)</span>
             </label>
             ${
               modal.relayEnabled
                 ? `
-              <div class="sync-privacy-note">不收集任何用户数据：每次同步均在本地随机生成一次性 256-bit 密钥进行 AES-256-GCM 端到端加密，密钥仅包含在二维码/同步串中，绝不上传服务端；服务端仅临时暂存纯密文，无法解密，3 分钟或拉取完成后立即销毁。</div>
+              <div class="sync-privacy-note">Zero-knowledge & private: Every sync generates an ephemeral 256-bit AES-256-GCM key locally. The key is contained solely in the QR code/sync string and never uploaded. The server only holds ciphertext and destroys it within 3 minutes or after download.</div>
               <div class="sync-inline-row">
-                <input id="sync-relay-url" class="modal-input" maxlength="260" placeholder="官网或自建 Cloudflare Worker 地址（https://...）" value="${escapeHtml(modal.relayUrlDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
-                <button id="sync-lan-start-btn" class="btn primary" type="button" ${busyAny ? "disabled" : ""}>${modal.lanShareBusy ? "上传密文中..." : isRelayActive ? "重新生成" : "生成随机加密中转码"}</button>
+                <input id="sync-relay-url" class="modal-input" maxlength="260" placeholder="Cloudflare Worker Relay URL (https://...)" value="${escapeHtml(modal.relayUrlDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
+                <button id="sync-lan-start-btn" class="btn primary" type="button" ${busyAny ? "disabled" : ""}>${modal.lanShareBusy ? "Uploading..." : isRelayActive ? "Regenerate" : "Generate Encrypted Relay Code"}</button>
               </div>
             `
                 : `
-              <div class="modal-hint">默认仅通过本地局域网点对点直连（3 分钟或最多 3 次拉取后自动关闭）。</div>
+              <div class="modal-hint">Peer-to-peer local network transfer by default (auto-closes in 3 mins or after 3 pulls).</div>
               <div class="sync-inline-row">
-                <input id="sync-lan-share-pass" class="modal-input" maxlength="64" placeholder="同步口令（留空自动生成 6 位数字 PIN）" value="${escapeHtml(modal.lanSharePassDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
-                <button id="sync-lan-start-btn" class="btn primary" type="button" ${busyAny ? "disabled" : ""}>${modal.lanShareBusy ? "开启中..." : shareInfo && !isRelayActive ? "重新开启" : "开启共享"}</button>
+                <input id="sync-lan-share-pass" class="modal-input" maxlength="64" placeholder="Sync passphrase (leave empty for auto 6-digit PIN)" value="${escapeHtml(modal.lanSharePassDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
+                <button id="sync-lan-start-btn" class="btn primary" type="button" ${busyAny ? "disabled" : ""}>${modal.lanShareBusy ? "Starting..." : shareInfo && !isRelayActive ? "Restart Share" : "Start Sharing"}</button>
               </div>
             `
             }
@@ -1401,18 +1401,18 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
               <div class="sync-qr-wrap">
                 <div class="sync-qr-box">${shareInfo.qrSvg}</div>
                 <div class="sync-meta-grid">
-                  <span class="sync-meta-label">${isRelayActive ? "中转通道" : "局域网地址"}</span>
+                  <span class="sync-meta-label">${isRelayActive ? "Relay Channel" : "LAN Address"}</span>
                   <span class="sync-meta-val">${escapeHtml(shareInfo.address)}</span>
-                  <span class="sync-meta-label">${isRelayActive ? "端到端加密" : "同步口令"}</span>
+                  <span class="sync-meta-label">${isRelayActive ? "E2E Encryption" : "Passphrase"}</span>
                   <span class="sync-meta-val">${escapeHtml(shareInfo.passphrase)}</span>
-                  <span class="sync-meta-label">打包内容</span>
-                  <span>${shareInfo.accountCount} 个账号（含 ${shareInfo.cookieAccountCount} 个登录态）</span>
-                  <span class="sync-meta-label">${isRelayActive ? "销毁策略" : "有效期"}</span>
-                  <span>约 3 分钟 / 最多 ${shareInfo.maxDownloads} 次拉取${isRelayActive ? "后自动销毁" : ""}</span>
+                  <span class="sync-meta-label">Contents</span>
+                  <span>${shareInfo.accountCount} accounts (${shareInfo.cookieAccountCount} with login sessions)</span>
+                  <span class="sync-meta-label">${isRelayActive ? "Destruction" : "Expires In"}</span>
+                  <span>~3 min / up to ${shareInfo.maxDownloads} pulls${isRelayActive ? " (then destroyed)" : ""}</span>
                 </div>
                 <div class="sync-ops-row">
-                  <button id="sync-lan-copy-uri-btn" class="mini-btn" type="button">复制同步串</button>
-                  <button id="sync-lan-stop-btn" class="mini-btn danger-btn" type="button">${isRelayActive ? "立即销毁并停止" : "停止共享"}</button>
+                  <button id="sync-lan-copy-uri-btn" class="mini-btn" type="button">Copy Sync String</button>
+                  <button id="sync-lan-stop-btn" class="mini-btn danger-btn" type="button">${isRelayActive ? "Destroy & Stop" : "Stop Sharing"}</button>
                 </div>
               </div>
             `
@@ -1420,96 +1420,96 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
             }
           </div>
           <div class="sync-section">
-            <div class="sync-section-title">作为接收端（扫码或输入同步串拉取）</div>
+            <div class="sync-section-title">Receiver Mode (Scan QR or Enter Sync String)</div>
             ${
               isMobilePlatform(state.platform)
-                ? `<button id="sync-lan-scan-btn" class="btn primary sync-scan-btn" type="button" ${busyAny ? "disabled" : ""}>${ICON_QR_SCAN}<span>${modal.lanScanBusy ? "正在识别并同步..." : "扫码直接同步"}</span></button>`
+                ? `<button id="sync-lan-scan-btn" class="btn primary sync-scan-btn" type="button" ${busyAny ? "disabled" : ""}>${ICON_QR_SCAN}<span>${modal.lanScanBusy ? "Scanning..." : "Scan QR to Sync"}</span></button>`
                 : ""
             }
-            <input id="sync-lan-pull-addr" class="modal-input" maxlength="512" placeholder="输入局域网地址或粘贴 maam-sync:// 同步串（支持局域网与中转码）" value="${escapeHtml(modal.lanPullAddrDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
+            <input id="sync-lan-pull-addr" class="modal-input" maxlength="512" placeholder="Enter LAN address or paste maam-sync:// sync string" value="${escapeHtml(modal.lanPullAddrDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
             <div class="sync-inline-row">
-              <input id="sync-lan-pull-pass" class="modal-input" maxlength="128" placeholder="口令或二维码自动填入的端到端密钥片段" value="${escapeHtml(modal.lanPullPassDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
-              <button id="sync-lan-pull-btn" class="btn primary" type="button" ${busyAny ? "disabled" : ""}>${modal.lanPullBusy ? "拉取中..." : "拉取并合并"}</button>
+              <input id="sync-lan-pull-pass" class="modal-input" maxlength="128" placeholder="Passphrase or auto-filled key fragment" value="${escapeHtml(modal.lanPullPassDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
+              <button id="sync-lan-pull-btn" class="btn primary" type="button" ${busyAny ? "disabled" : ""}>${modal.lanPullBusy ? "Pulling..." : "Pull & Merge"}</button>
             </div>
           </div>
         `
         : modal.tab === "webdav"
           ? `
           <div class="sync-section">
-            <div class="sync-section-title">WebDAV 服务器配置</div>
-            <div class="modal-hint">支持坚果云、Nextcloud、AList / OpenList、NAS 等标准 WebDAV（公网需使用 HTTPS，局域网可用 HTTP）。连接或同步成功后会自动记住地址与凭据。</div>
-            <input id="sync-webdav-url" class="modal-input" maxlength="512" placeholder="WebDAV 地址（如 https://dav.jianguoyun.com/dav/diehao/）" value="${escapeHtml(modal.webdavUrlDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
+            <div class="sync-section-title">WebDAV Server Configuration</div>
+            <div class="modal-hint">Supports standard WebDAV servers like Jianguoyun, Nextcloud, AList / OpenList, NAS, etc. (HTTPS required for public web, HTTP allowed for LAN). URL and credentials are automatically remembered upon successful connection or sync.</div>
+            <input id="sync-webdav-url" class="modal-input" maxlength="512" placeholder="WebDAV URL (e.g. https://dav.jianguoyun.com/dav/maam/)" value="${escapeHtml(modal.webdavUrlDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
             <div class="sync-inline-row">
-              <input id="sync-webdav-user" class="modal-input" maxlength="128" placeholder="用户名 / 邮箱" value="${escapeHtml(modal.webdavUserDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
-              <input id="sync-webdav-pass" class="modal-input" type="password" maxlength="256" placeholder="应用密码" value="${escapeHtml(modal.webdavPassDraft)}" autocomplete="off" ${busyAny ? "disabled" : ""} />
+              <input id="sync-webdav-user" class="modal-input" maxlength="128" placeholder="Username / Email" value="${escapeHtml(modal.webdavUserDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
+              <input id="sync-webdav-pass" class="modal-input" type="password" maxlength="256" placeholder="App Password" value="${escapeHtml(modal.webdavPassDraft)}" autocomplete="off" ${busyAny ? "disabled" : ""} />
             </div>
             <div class="sync-inline-row">
-              <input id="sync-webdav-filename" class="modal-input" maxlength="128" placeholder="同步文件名（默认 maam-sync.maam）" value="${escapeHtml(modal.webdavFilenameDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
-              <button id="sync-webdav-test-btn" class="btn" type="button" ${busyAny ? "disabled" : ""}>${modal.webdavTestBusy ? "测试中..." : "测试连接"}</button>
+              <input id="sync-webdav-filename" class="modal-input" maxlength="128" placeholder="Sync filename (default: maam-sync.maam)" value="${escapeHtml(modal.webdavFilenameDraft)}" autocomplete="off" spellcheck="false" ${busyAny ? "disabled" : ""} />
+              <button id="sync-webdav-test-btn" class="btn" type="button" ${busyAny ? "disabled" : ""}>${modal.webdavTestBusy ? "Testing..." : "Test Connection"}</button>
             </div>
             ${modal.webdavHint ? `<div class="modal-hint">${escapeHtml(modal.webdavHint)}</div>` : ""}
           </div>
           <div class="sync-section">
-            <div class="sync-section-title">端到端加密上传与增量拉取</div>
-            <div class="sync-privacy-note">所有账号、代理、时区、群聊与 Cookie 均在本地使用 AES-256-GCM 加密后上传，WebDAV 网盘仅保存密文（加密口令不会保存或上传）；拉取采用增量合并，不删除本机已有账号。</div>
-            <input id="sync-webdav-sync-pass" class="modal-input" type="password" maxlength="128" placeholder="设置/输入端到端加密口令（至少 4 位，两端需一致）" value="${escapeHtml(modal.webdavSyncPassDraft)}" autocomplete="off" ${busyAny ? "disabled" : ""} />
+            <div class="sync-section-title">End-to-End Encrypted Push & Incremental Pull</div>
+            <div class="sync-privacy-note">All accounts, proxies, timezones, group chats, and cookies are encrypted locally with AES-256-GCM before uploading. WebDAV stores ciphertext only (passwords are never saved or uploaded). Pull merges incrementally without deleting local accounts.</div>
+            <input id="sync-webdav-sync-pass" class="modal-input" type="password" maxlength="128" placeholder="Set/enter end-to-end encryption password (min 4 chars)" value="${escapeHtml(modal.webdavSyncPassDraft)}" autocomplete="off" ${busyAny ? "disabled" : ""} />
             <div class="sync-ops-row">
-              <button id="sync-webdav-push-btn" class="btn primary" type="button" ${busyAny ? "disabled" : ""}>${modal.webdavPushBusy ? "加密上传中..." : "加密上传到 WebDAV"}</button>
-              <button id="sync-webdav-pull-btn" class="btn" type="button" ${busyAny ? "disabled" : ""}>${modal.webdavPullBusy ? "拉取解密中..." : "从 WebDAV 拉取并合并"}</button>
+              <button id="sync-webdav-push-btn" class="btn primary" type="button" ${busyAny ? "disabled" : ""}>${modal.webdavPushBusy ? "Uploading..." : "Encrypted Push to WebDAV"}</button>
+              <button id="sync-webdav-pull-btn" class="btn" type="button" ${busyAny ? "disabled" : ""}>${modal.webdavPullBusy ? "Pulling..." : "Pull & Merge from WebDAV"}</button>
             </div>
           </div>
         `
           : `
           <div class="sync-section">
-            <div class="sync-section-title">导出加密备份（.maam）</div>
-            <div class="modal-hint">AES-256-GCM 端到端加密包含所有账号、代理、时区、群聊与 Cookie 登录态。</div>
+            <div class="sync-section-title">Export Encrypted Backup (.maam)</div>
+            <div class="modal-hint">AES-256-GCM encrypted backup containing accounts, proxies, timezones, groups, and sessions.</div>
             <div class="sync-inline-row">
-              <input id="sync-file-export-pass" class="modal-input" type="password" maxlength="128" placeholder="设置加密口令（至少 4 位）" value="${escapeHtml(modal.fileExportPassDraft)}" autocomplete="off" ${busyAny ? "disabled" : ""} />
-              <button id="sync-file-export-btn" class="btn primary" type="button" ${busyAny ? "disabled" : ""}>${modal.fileExportBusy ? "导出中..." : "导出备份"}</button>
+              <input id="sync-file-export-pass" class="modal-input" type="password" maxlength="128" placeholder="Set encryption password (min 4 chars)" value="${escapeHtml(modal.fileExportPassDraft)}" autocomplete="off" ${busyAny ? "disabled" : ""} />
+              <button id="sync-file-export-btn" class="btn primary" type="button" ${busyAny ? "disabled" : ""}>${modal.fileExportBusy ? "Exporting..." : "Export Backup"}</button>
             </div>
             ${
               exportRes
                 ? `
-              <div class="modal-hint">已加密 ${exportRes.accountCount} 个账号（${exportRes.cookieAccountCount} 个含 Cookie）。${exportRes.savedPath ? `<br/>已保存：<code>${escapeHtml(exportRes.savedPath)}</code>` : ""}</div>
+              <div class="modal-hint">Encrypted ${exportRes.accountCount} accounts (${exportRes.cookieAccountCount} with cookies).${exportRes.savedPath ? `<br/>Saved: <code>${escapeHtml(exportRes.savedPath)}</code>` : ""}</div>
               <div class="sync-ops-row">
-                ${exportRes.downloadId != null ? `<button id="sync-file-reveal-btn" class="mini-btn" type="button">打开文件位置</button>` : ""}
-                <button id="sync-file-download-btn" class="mini-btn" type="button">保存 .maam 文件</button>
-                <button id="sync-file-copy-btn" class="mini-btn" type="button">复制密文</button>
+                ${exportRes.downloadId != null ? `<button id="sync-file-reveal-btn" class="mini-btn" type="button">Show in Folder</button>` : ""}
+                <button id="sync-file-download-btn" class="mini-btn" type="button">Save .maam File</button>
+                <button id="sync-file-copy-btn" class="mini-btn" type="button">Copy Ciphertext</button>
               </div>
             `
                 : ""
             }
           </div>
           <div class="sync-section">
-            <div class="sync-section-title">导入并解密备份</div>
+            <div class="sync-section-title">Import & Decrypt Backup</div>
             <input id="sync-file-picker" class="sync-file-input" type="file" accept=".maam,.json,application/json,text/plain" ${busyAny ? "disabled" : ""} />
-            ${modal.fileImportFileName ? `<div class="modal-hint">已读取文件：${escapeHtml(modal.fileImportFileName)}</div>` : ""}
-            <textarea id="sync-file-import-json" class="modal-textarea compact-cookie-textarea" rows="3" placeholder="或直接在此粘贴 .maam 加密备份全文" spellcheck="false" ${busyAny ? "disabled" : ""}>${escapeHtml(modal.fileImportJsonDraft)}</textarea>
+            ${modal.fileImportFileName ? `<div class="modal-hint">Loaded file: ${escapeHtml(modal.fileImportFileName)}</div>` : ""}
+            <textarea id="sync-file-import-json" class="modal-textarea compact-cookie-textarea" rows="3" placeholder="Or paste .maam encrypted ciphertext directly here" spellcheck="false" ${busyAny ? "disabled" : ""}>${escapeHtml(modal.fileImportJsonDraft)}</textarea>
             <div class="sync-inline-row">
-              <input id="sync-file-import-pass" class="modal-input" type="password" maxlength="128" placeholder="输入备份时的解密口令" value="${escapeHtml(modal.fileImportPassDraft)}" autocomplete="off" ${busyAny ? "disabled" : ""} />
-              <button id="sync-file-import-btn" class="btn primary" type="button" ${busyAny ? "disabled" : ""}>${modal.fileImportBusy ? "导入中..." : "解密并导入"}</button>
+              <input id="sync-file-import-pass" class="modal-input" type="password" maxlength="128" placeholder="Enter backup decryption password" value="${escapeHtml(modal.fileImportPassDraft)}" autocomplete="off" ${busyAny ? "disabled" : ""} />
+              <button id="sync-file-import-btn" class="btn primary" type="button" ${busyAny ? "disabled" : ""}>${modal.fileImportBusy ? "Importing..." : "Decrypt & Import"}</button>
             </div>
           </div>
         `;
     return `
       <div class="${modalOverlayClass()}" role="dialog" aria-modal="true">
         <div class="modal-card sync-modal-card">
-          <div class="modal-title">多端加密同步</div>
+          <div class="modal-title">Multi-Device Encrypted Sync</div>
           <div class="sync-tabs">
-            <button id="sync-tab-lan" class="sync-tab-btn ${modal.tab === "lan" ? "active" : ""}" type="button" ${busyAny ? "disabled" : ""}>扫码 / 局域网</button>
-            <button id="sync-tab-webdav" class="sync-tab-btn ${modal.tab === "webdav" ? "active" : ""}" type="button" ${busyAny ? "disabled" : ""}>WebDAV 云同步</button>
-            <button id="sync-tab-file" class="sync-tab-btn ${modal.tab === "file" ? "active" : ""}" type="button" ${busyAny ? "disabled" : ""}>加密备份文件</button>
+            <button id="sync-tab-lan" class="sync-tab-btn ${modal.tab === "lan" ? "active" : ""}" type="button" ${busyAny ? "disabled" : ""}>QR / LAN</button>
+            <button id="sync-tab-webdav" class="sync-tab-btn ${modal.tab === "webdav" ? "active" : ""}" type="button" ${busyAny ? "disabled" : ""}>WebDAV Cloud Sync</button>
+            <button id="sync-tab-file" class="sync-tab-btn ${modal.tab === "file" ? "active" : ""}" type="button" ${busyAny ? "disabled" : ""}>Backup File (.maam)</button>
           </div>
           ${tabBody}
           ${
             summary
-              ? `<div class="sync-summary-box">同步成功：新增 ${summary.addedAccounts} 个账号，更新 ${summary.updatedAccounts} 个账号，写入 ${summary.importedCookieAccounts} 个登录态${summary.mergedGroups > 0 ? `，合并 ${summary.mergedGroups} 个群聊` : ""}${summary.skippedCookieAccounts > 0 ? `（${summary.skippedCookieAccounts} 个 Cookie 写入跳过）` : ""}</div>`
+              ? `<div class="sync-summary-box">Sync successful: Added ${summary.addedAccounts} account(s), updated ${summary.updatedAccounts}, wrote ${summary.importedCookieAccounts} session(s)${summary.mergedGroups > 0 ? `, merged ${summary.mergedGroups} group(s)` : ""}${summary.skippedCookieAccounts > 0 ? ` (${summary.skippedCookieAccounts} cookies skipped)` : ""}</div>`
               : ""
           }
           ${modal.copyHint ? `<div class="modal-hint">${escapeHtml(modal.copyHint)}</div>` : ""}
           ${modal.error ? `<div id="modal-error-box" class="update-error-box" role="alert">${escapeHtml(modal.error)}</div>` : ""}
           <div class="modal-footer">
-            <button id="modal-cancel-btn" class="btn" type="button" ${busyAny ? "disabled" : ""}>关闭</button>
+            <button id="modal-cancel-btn" class="btn" type="button" ${busyAny ? "disabled" : ""}>Close</button>
           </div>
         </div>
       </div>
@@ -1518,45 +1518,45 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
   if (modal.kind === "settings") {
     const saving = Boolean(modal.saving);
     const shortcutPresets = [
-      { label: "默认", val: "CommandOrControl+Shift+M" },
+      { label: "Default", val: "CommandOrControl+Shift+M" },
       { label: "Alt+Space", val: "Alt+Space" },
       { label: "Cmd/Ctrl+Alt+A", val: "CommandOrControl+Alt+A" },
-      { label: "禁用", val: "" },
+      { label: "Disabled", val: "" },
     ];
     const statusText = state.globalShortcutActive
-      ? "快捷键已生效"
+      ? "Shortcut Active"
       : state.globalShortcutError
         ? state.globalShortcutError
         : state.settings.globalShortcut
-          ? "未激活"
-          : "已禁用";
+          ? "Inactive"
+          : "Disabled";
     const intervalPresets = [
-      { label: "5 分钟", val: 5 },
-      { label: "15 分钟", val: 15 },
-      { label: "30 分钟", val: 30 },
-      { label: "仅手动", val: 0 },
+      { label: "5 mins", val: 5 },
+      { label: "15 mins", val: 15 },
+      { label: "30 mins", val: 30 },
+      { label: "Manual only", val: 0 },
     ];
     return `
       <div class="${modalOverlayClass()}" role="dialog" aria-modal="true">
         <div class="modal-card">
-          <div class="modal-title">桌面端设置</div>
+          <div class="modal-title">Desktop Settings</div>
           <label class="setting-row" for="modal-tray-checkbox">
-            <span class="setting-label">关闭主窗口时最小化到系统托盘</span>
+            <span class="setting-label">Minimize to system tray when closing window</span>
             <input id="modal-tray-checkbox" class="setting-checkbox" type="checkbox" ${modal.minimizeToTray ? "checked" : ""} ${saving ? "disabled" : ""} />
           </label>
           <label class="setting-row" for="modal-auto-approve-checkbox">
-            <span class="setting-label">自动审批权限请求（前台与后台保活账号）</span>
+            <span class="setting-label">Auto-approve tool permissions (Active & background accounts)</span>
             <input id="modal-auto-approve-checkbox" class="setting-checkbox" type="checkbox" ${modal.autoApprove ? "checked" : ""} ${saving ? "disabled" : ""} />
           </label>
-          <div class="modal-hint">开启后，已预热保活的工具授权弹窗将自动点击允许，并跳过删除/退出/支付等高危操作。</div>
+          <div class="modal-hint">When enabled, permission dialogs will be approved automatically, skipping risky actions like deletion/logout/payments.</div>
           <label class="setting-row" for="modal-isolate-proxy-checkbox">
-            <span class="setting-label">同代理仅保活当前账号（防多号同 IP 限流）</span>
+            <span class="setting-label">Keep alive only active account per proxy (Prevent IP rate-limits)</span>
             <input id="modal-isolate-proxy-checkbox" class="setting-checkbox" type="checkbox" ${modal.isolateSameProxyKeepAlive ? "checked" : ""} ${saving ? "disabled" : ""} />
           </label>
-          <div class="modal-hint">开启后，未配独立代理或共用同一代理的同平台账号仅保持当前活跃窗口，切号自动释放旧窗口；关闭则恢复全部后台预热保活。</div>
+          <div class="modal-hint">When enabled, accounts sharing the same proxy only keep the active window open. Disable to keep all accounts warm in background.</div>
           <div class="setting-field">
             <div class="setting-field-head">
-              <label class="modal-desc" for="modal-sync-interval-input">后台静默保活 / 额度检测间隔（分钟）</label>
+              <label class="modal-desc" for="modal-sync-interval-input">Background Keep-Alive / Quota Check Interval (minutes)</label>
             </div>
             <input id="modal-sync-interval-input" class="modal-input" type="number" min="0" max="120" step="1" value="${escapeHtml(String(modal.silentSyncIntervalMins))}" ${saving ? "disabled" : ""} />
             <div class="preset-chips">
@@ -1567,14 +1567,14 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
                 )
                 .join("")}
             </div>
-            <div class="modal-hint">窗口切回与定时检查均受此间隔限制；设为 0 则仅手动刷新。</div>
+            <div class="modal-hint">Controls background refresh rate; set to 0 for manual refresh only.</div>
           </div>
           <div class="setting-field">
             <div class="setting-field-head">
-              <label class="modal-desc" for="modal-shortcut-input">全局呼出 / 隐藏快捷键</label>
-              <span class="shortcut-status-pill ${state.globalShortcutActive ? "ok" : state.globalShortcutError ? "err" : ""}" title="${escapeHtml(statusText)}">${escapeHtml(state.globalShortcutActive ? "已生效" : state.globalShortcutError ? "注册失败" : "未启用")}</span>
+              <label class="modal-desc" for="modal-shortcut-input">Global Show / Hide Shortcut</label>
+              <span class="shortcut-status-pill ${state.globalShortcutActive ? "ok" : state.globalShortcutError ? "err" : ""}" title="${escapeHtml(statusText)}">${escapeHtml(state.globalShortcutActive ? "Active" : state.globalShortcutError ? "Failed" : "Disabled")}</span>
             </div>
-            <input id="modal-shortcut-input" class="modal-input" maxlength="80" placeholder="CommandOrControl+Shift+M（留空禁用）" value="${escapeHtml(modal.globalShortcut)}" autocomplete="off" spellcheck="false" ${saving ? "disabled" : ""} />
+            <input id="modal-shortcut-input" class="modal-input" maxlength="80" placeholder="CommandOrControl+Shift+M (leave empty to disable)" value="${escapeHtml(modal.globalShortcut)}" autocomplete="off" spellcheck="false" ${saving ? "disabled" : ""} />
             <div class="preset-chips">
               ${shortcutPresets
                 .map(
@@ -1583,12 +1583,12 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
                 )
                 .join("")}
             </div>
-            ${state.globalShortcutError && !modal.error ? `<div class="modal-hint error-hint">${escapeHtml(state.globalShortcutError)}</div>` : `<div class="modal-hint">在任意应用中按下快捷键即可显示或隐藏主窗口；托盘菜单可完全退出。</div>`}
+            ${state.globalShortcutError && !modal.error ? `<div class="modal-hint error-hint">${escapeHtml(state.globalShortcutError)}</div>` : `<div class="modal-hint">Press the shortcut anywhere to toggle the main window; use tray menu to exit completely.</div>`}
           </div>
           ${modal.error ? `<div id="modal-error-box" class="update-error-box" role="alert">${escapeHtml(modal.error)}</div>` : ""}
           <div class="modal-footer">
-            <button id="modal-cancel-btn" class="btn" type="button" ${saving ? "disabled" : ""}>取消</button>
-            <button id="modal-confirm-btn" class="btn primary" type="button" ${saving ? "disabled" : ""}>${saving ? "保存中..." : "保存"}</button>
+            <button id="modal-cancel-btn" class="btn" type="button" ${saving ? "disabled" : ""}>Cancel</button>
+            <button id="modal-confirm-btn" class="btn primary" type="button" ${saving ? "disabled" : ""}>${saving ? "Saving..." : "Save"}</button>
           </div>
         </div>
       </div>
@@ -1600,11 +1600,11 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
     const proxyTesting = Boolean(modal.proxyTesting);
     const supportsProxy = supportsAccountProxy(platform);
     const title = creating
-      ? `新增 ${escapeHtml(provider.shortName)} 账号`
-      : "账号设置";
+      ? `Add ${escapeHtml(provider.shortName)} Account`
+      : "Account Settings";
     const aliasPlaceholder = creating
-      ? "备注名称（留空则自动获取登录邮箱）"
-      : "备注名称（留空保留原备注）";
+      ? "Alias name (leave empty to auto-detect email)"
+      : "Alias name (leave empty to keep current)"
     const testRes = modal.proxyTestResult;
     const renameAcc = modal.kind === "rename" ? modal.account : null;
     const currentAcc = renameAcc
@@ -1617,43 +1617,43 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
       <div class="${modalOverlayClass()}" role="dialog" aria-modal="true">
         <div class="modal-card">
           <div class="modal-title">${title}</div>
-          <input id="modal-alias-input" class="modal-input" maxlength="60" placeholder="${aliasPlaceholder}" aria-label="备注名称" value="${escapeHtml(modal.draft)}" ${saving ? "disabled" : ""} />
+          <input id="modal-alias-input" class="modal-input" maxlength="60" placeholder="${aliasPlaceholder}" aria-label="Alias" value="${escapeHtml(modal.draft)}" ${saving ? "disabled" : ""} />
           ${supportsProxy ? `
-            <label class="modal-desc" for="modal-proxy-input">HTTP CONNECT 代理（留空使用系统网络）</label>
+            <label class="modal-desc" for="modal-proxy-input">HTTP CONNECT Proxy (leave empty for system network)</label>
             <div class="proxy-input-row">
               <input id="modal-proxy-input" class="modal-input" maxlength="512" placeholder="http://127.0.0.1:7890" value="${escapeHtml(modal.proxyDraft)}" autocomplete="off" spellcheck="false" ${saving ? "disabled" : ""} />
-              ${!isMobilePlatform(platform) ? `<button id="proxy-test-btn" class="btn mini-test-btn" type="button" ${saving || proxyTesting ? "disabled" : ""}>${proxyTesting ? "测速中..." : "测试连接"}</button>` : ""}
+              ${!isMobilePlatform(platform) ? `<button id="proxy-test-btn" class="btn mini-test-btn" type="button" ${saving || proxyTesting ? "disabled" : ""}>${proxyTesting ? "Testing..." : "Test Proxy"}</button>` : ""}
             </div>
             ${testRes ? `<div id="proxy-test-result" class="proxy-test-box ${testRes.ok ? "ok" : "err"}">${escapeHtml(testRes.message)}</div>` : ""}
-            <div class="modal-hint">仅作用于内嵌页面；外部浏览器登录与更新检查不走此代理。</div>
+            <div class="modal-hint">Applies to internal webviews; external browser login and updates do not use this proxy.</div>
           ` : ""}
-          <label class="modal-desc" for="modal-timezone-input">自定义时区（留空跟随系统）</label>
-          <input id="modal-timezone-input" class="modal-input" maxlength="64" placeholder="IANA 时区（例如 America/New_York、Asia/Tokyo）" value="${escapeHtml(modal.timezoneDraft)}" autocomplete="off" spellcheck="false" ${saving ? "disabled" : ""} />
+          <label class="modal-desc" for="modal-timezone-input">Custom Timezone (leave empty for system default)</label>
+          <input id="modal-timezone-input" class="modal-input" maxlength="64" placeholder="IANA Timezone (e.g. America/New_York, Asia/Tokyo)" value="${escapeHtml(modal.timezoneDraft)}" autocomplete="off" spellcheck="false" ${saving ? "disabled" : ""} />
           <div class="preset-chips">
             ${TIMEZONE_PRESETS.map(
               (p) =>
                 `<button class="preset-chip" data-timezone-preset="${escapeHtml(p.value)}" type="button" ${saving ? "disabled" : ""}>${escapeHtml(p.label)}</button>`
             ).join("")}
           </div>
-          <div class="modal-hint">${platform === "windows" ? "通过 WebView2 原生接口按账号独立生效，留空则使用系统时区。" : "文档加载前注入该账号独立页面，支持夏令时，留空则使用系统时区。"}</div>
+          <div class="modal-hint">${platform === "windows" ? "Isolated per account via native WebView2; leave empty to use system timezone." : "Injected into isolated pages before document load; leave empty for system timezone."}</div>
           ${cookieInfo ? `<div class="cookie-detail-box ${cookieInfo.tone}" title="${escapeHtml(cookieInfo.tooltip)}"><span class="cookie-expiry-dot"></span><span>${escapeHtml(cookieInfo.detailText)}</span></div>` : ""}
           <div class="cookie-import-section">
-            <label class="modal-desc" for="modal-cookie-import-input">${creating ? "导入 Cookie（可选，支持从 Chrome 等浏览器登录后粘贴）" : "导入 Cookie（支持从 Chrome 等浏览器登录后粘贴）"}</label>
-            <textarea id="modal-cookie-import-input" class="modal-textarea compact-cookie-textarea" rows="3" placeholder="粘贴 Cookie 请求头（a=1; b=2）、Netscape cookies.txt 或浏览器导出的 JSON 数组..." ${saving ? "disabled" : ""}>${escapeHtml(modal.cookieDraft ?? "")}</textarea>
+            <label class="modal-desc" for="modal-cookie-import-input">${creating ? "Import Cookies (Optional, paste exported cookies from Chrome/browser)" : "Import Cookies (Paste exported cookies from Chrome/browser)"}</label>
+            <textarea id="modal-cookie-import-input" class="modal-textarea compact-cookie-textarea" rows="3" placeholder="Paste Cookie header (a=1; b=2), Netscape cookies.txt, or JSON array..." ${saving ? "disabled" : ""}>${escapeHtml(modal.cookieDraft ?? "")}</textarea>
             ${creating ? `
-              <div class="modal-hint">留空则创建后手动登录；粘贴 Cookie 后点击「创建并打开」将直接导入并登录。</div>
+              <div class="modal-hint">Leave empty to log in manually; pasting cookies and clicking \"Create & Launch\" will import and log in directly.</div>
             ` : `
               <div class="cookie-import-actions">
-                <span class="modal-hint">适用于 Google OAuth 无法在内置窗口直接登录的场景；导入后自动刷新当前账号。</span>
-                <button id="modal-import-cookie-btn" class="btn mini-test-btn" type="button" ${saving || modal.cookieImporting ? "disabled" : ""}>${modal.cookieImporting ? "导入中..." : "导入 Cookie"}</button>
+                <span class="modal-hint">Useful when Google OAuth cannot log in inside webview; auto-refreshes account on import.</span>
+                <button id="modal-import-cookie-btn" class="btn mini-test-btn" type="button" ${saving || modal.cookieImporting ? "disabled" : ""}>${modal.cookieImporting ? "Importing..." : "Import Cookies"}</button>
               </div>
             `}
           </div>
           ${modal.error ? `<div id="modal-error-box" class="update-error-box" role="alert">${escapeHtml(modal.error)}</div>` : ""}
           <div class="modal-footer">
-            ${!creating ? `<button id="modal-clear-data-btn" class="btn danger-outline left-action" type="button" ${saving ? "disabled" : ""}>${modal.confirmClear ? "确认清空？" : "清空登录缓存"}</button>` : ""}
-            <button id="modal-cancel-btn" class="btn" type="button" ${saving ? "disabled" : ""}>取消</button>
-            <button id="modal-confirm-btn" class="btn primary" type="button" ${saving ? "disabled" : ""}>${saving ? (creating ? "创建中..." : "保存中...") : (creating ? "创建并打开" : "保存")}</button>
+            ${!creating ? `<button id="modal-clear-data-btn" class="btn danger-outline left-action" type="button" ${saving ? "disabled" : ""}>${modal.confirmClear ? "Confirm Clear?" : "Clear Session Cache"}</button>` : ""}
+            <button id="modal-cancel-btn" class="btn" type="button" ${saving ? "disabled" : ""}>Cancel</button>
+            <button id="modal-confirm-btn" class="btn primary" type="button" ${saving ? "disabled" : ""}>${saving ? (creating ? "Creating..." : "Saving...") : (creating ? "Create & Launch" : "Save")}</button>
           </div>
         </div>
       </div>
@@ -1719,7 +1719,7 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
 
     const extKindGroups: Array<{ kind: ExternalAgentKind; title: string; pid: "api" | "cli" }> = [
       { kind: "openai_api", title: "OpenAI API", pid: "api" },
-      { kind: "local_cli", title: "本地 CLI", pid: "cli" },
+      { kind: "local_cli", title: "Local CLI", pid: "cli" },
     ];
     const externalGroupHtml = extKindGroups
       .map(({ kind, title, pid }) => {
@@ -1727,7 +1727,7 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
         if (list.length === 0) return "";
         return `
           <div class="group-picker-section">
-            <div class="group-picker-provider"><span>${escapeHtml(title)}</span><span class="group-provider-tag">直连</span></div>
+            <div class="group-picker-provider"><span>${escapeHtml(title)}</span><span class="group-provider-tag">Direct</span></div>
             <div class="group-member-list">
               ${list
                 .map((ext) => {
@@ -1775,20 +1775,20 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
     return `
       <div class="${modalOverlayClass()}" role="dialog" aria-modal="true">
         <div class="modal-card group-modal-card">
-          <div class="modal-title">${editing ? `编辑「${escapeHtml(gModal.group!.name)}」` : "创建群聊"}</div>
-          <input id="modal-group-name-input" class="modal-input" maxlength="32" placeholder="群聊名称（如：产品头脑风暴）" aria-label="群聊名称" value="${escapeHtml(gModal.nameDraft)}" ${saving ? "disabled" : ""} />
+          <div class="modal-title">${editing ? `Edit \"${escapeHtml(gModal.group!.name)}\"` : "Create Group Chat"}</div>
+          <input id="modal-group-name-input" class="modal-input" maxlength="32" placeholder="Group Name (e.g., Product Brainstorm)" aria-label="Group Name" value="${escapeHtml(gModal.nameDraft)}" ${saving ? "disabled" : ""} />
           <div class="group-picker-head-row">
-            <div class="modal-desc">选择参与群聊的网页账号或 API / CLI 成员</div>
-            <button id="open-external-agents-from-group-btn" class="mini-btn primary-text" type="button" ${saving ? "disabled" : ""}>+ 管理 API/CLI</button>
+            <div class="modal-desc">Select Web Accounts or API / CLI members for this group</div>
+            <button id="open-external-agents-from-group-btn" class="mini-btn primary-text" type="button" ${saving ? "disabled" : ""}>+ Manage API/CLI</button>
           </div>
           <div class="group-member-picker">
-            ${pickerContent || `<div class="group-picker-empty">当前没有可用成员，可登录网页或点击右上角添加 API / CLI</div>`}
+            ${pickerContent || `<div class="group-picker-empty">No available members. Please log in or add API / CLI members.</div>`}
           </div>
           <div id="modal-group-hint" class="modal-hint">${escapeHtml(hintText)}</div>
           ${gModal.error ? `<div id="modal-error-box" class="update-error-box" role="alert">${escapeHtml(gModal.error)}</div>` : ""}
           <div class="modal-footer">
-            <button id="modal-cancel-btn" class="btn" type="button" ${saving ? "disabled" : ""}>取消</button>
-            <button id="modal-confirm-btn" class="btn primary" type="button" ${saving || gModal.selectedMembers.length === 0 ? "disabled" : ""}>${saving ? (editing ? "保存中..." : "创建中...") : (editing ? "保存" : "创建群聊")}</button>
+            <button id="modal-cancel-btn" class="btn" type="button" ${saving ? "disabled" : ""}>Cancel</button>
+            <button id="modal-confirm-btn" class="btn primary" type="button" ${saving || gModal.selectedMembers.length === 0 ? "disabled" : ""}>${saving ? (editing ? "Saving..." : "Creating...") : (editing ? "Save" : "Create Group")}</button>
           </div>
         </div>
       </div>
@@ -1803,16 +1803,16 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
     let tabBody = "";
     if (kModal.tab === "context") {
       tabBody = `
-        <div class="modal-desc">所有被 @ 唤醒的成员在首次进入或配置变更后自动增量同步此上下文，API / CLI 成员每轮自动携带。</div>
+        <div class="modal-desc">All @mentioned members automatically receive this shared context upon invocation. API / CLI members carry it on each turn.</div>
         <textarea
           id="modal-group-context-input"
           class="modal-textarea"
           rows="8"
           maxlength="8000"
-          placeholder="例如：项目采用 Tauri + Rust + TypeScript；核心约束是低内存；当前正在排查…"
+          placeholder="e.g., The project uses Tauri + Rust + TypeScript; key constraint is low memory..."
           ${saving ? "disabled" : ""}
         >${escapeHtml(kModal.contextDraft)}</textarea>
-        <div class="modal-hint"><span id="modal-group-context-count">${kModal.contextDraft.length}</span>/8000 字符 · 也可点消息「沉淀上下文」或顶部「沉淀本轮结论」</div>
+        <div class="modal-hint"><span id="modal-group-context-count">${kModal.contextDraft.length}</span>/8000 chars · You can also click \"Pin to Context\" on messages</div>
       `;
     } else if (kModal.tab === "skills") {
       const presetsHtml = GROUP_SKILL_PRESETS.map((p, idx) => {
@@ -1822,7 +1822,7 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
 
       const skillsHtml =
         kModal.skillsDraft.length === 0
-          ? `<div class="group-picker-empty">暂未添加共享技能，可点击上方预设或下方自定义添加。</div>`
+          ? `<div class="group-picker-empty">No shared skills yet. Add from presets above or create a custom skill below.</div>`
           : kModal.skillsDraft
               .map(
                 (s) => `
@@ -1833,8 +1833,8 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
                     <span class="skill-card-name">${escapeHtml(s.name)}</span>
                   </label>
                   <div class="skill-card-ops">
-                    <button class="mini-btn" data-edit-skill-id="${escapeHtml(s.id)}" type="button" ${saving ? "disabled" : ""}>编辑</button>
-                    <button class="mini-btn danger-text" data-delete-skill-id="${escapeHtml(s.id)}" type="button" ${saving ? "disabled" : ""}>删除</button>
+                    <button class="mini-btn" data-edit-skill-id="${escapeHtml(s.id)}" type="button" ${saving ? "disabled" : ""}>Edit</button>
+                    <button class="mini-btn danger-text" data-delete-skill-id="${escapeHtml(s.id)}" type="button" ${saving ? "disabled" : ""}>Delete</button>
                   </div>
                 </div>
                 <div class="skill-card-desc">${escapeHtml(s.description || s.content)}</div>
@@ -1845,18 +1845,18 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
 
       tabBody = `
         <div class="skill-presets-row">
-          <span class="skill-presets-label">预设：</span>
+          <span class="skill-presets-label">Presets:</span>
           ${presetsHtml}
         </div>
         <div class="skills-list">${skillsHtml}</div>
         <div class="skill-editor-box">
-          <div class="skill-editor-title">${kModal.editingSkillId ? "编辑共享技能" : "添加自定义技能"}</div>
-          <input id="modal-skill-name-input" class="modal-input" maxlength="48" placeholder="技能名称（如：代码审查规范）" value="${escapeHtml(kModal.skillNameDraft)}" ${saving ? "disabled" : ""} />
-          <input id="modal-skill-desc-input" class="modal-input" maxlength="120" placeholder="简短说明（选填）" value="${escapeHtml(kModal.skillDescDraft)}" ${saving ? "disabled" : ""} />
-          <textarea id="modal-skill-content-input" class="modal-textarea" rows="3" maxlength="2000" placeholder="输入注入给各 AI 成员的技能指令原文…" ${saving ? "disabled" : ""}>${escapeHtml(kModal.skillContentDraft)}</textarea>
+          <div class="skill-editor-title">${kModal.editingSkillId ? "Edit Shared Skill" : "Add Custom Skill"}</div>
+          <input id="modal-skill-name-input" class="modal-input" maxlength="48" placeholder="Skill Name (e.g., Code Review Standards)" value="${escapeHtml(kModal.skillNameDraft)}" ${saving ? "disabled" : ""} />
+          <input id="modal-skill-desc-input" class="modal-input" maxlength="120" placeholder="Short Description (optional)" value="${escapeHtml(kModal.skillDescDraft)}" ${saving ? "disabled" : ""} />
+          <textarea id="modal-skill-content-input" class="modal-textarea" rows="3" maxlength="2000" placeholder="Enter prompt instructions injected into AI members..." ${saving ? "disabled" : ""}>${escapeHtml(kModal.skillContentDraft)}</textarea>
           <div class="skill-editor-actions">
-            ${kModal.editingSkillId ? `<button id="modal-skill-cancel-edit-btn" class="mini-btn" type="button" ${saving ? "disabled" : ""}>取消编辑</button>` : ""}
-            <button id="modal-skill-save-btn" class="mini-btn primary-text" type="button" ${saving ? "disabled" : ""}>${kModal.editingSkillId ? "更新技能" : "+ 添加技能"}</button>
+            ${kModal.editingSkillId ? `<button id="modal-skill-cancel-edit-btn" class="mini-btn" type="button" ${saving ? "disabled" : ""}>Cancel Edit</button>` : ""}
+            <button id="modal-skill-save-btn" class="mini-btn primary-text" type="button" ${saving ? "disabled" : ""}>${kModal.editingSkillId ? "Update Skill" : "+ Add Skill"}</button>
           </div>
         </div>
       `;
@@ -1879,15 +1879,15 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
             }
           }
           const bindingHtml = meta.isExternal
-            ? `<div class="role-thread-row"><span class="thread-stateless-tag">无状态直连（每轮携带完整上下文）</span></div>`
+            ? `<div class="role-thread-row"><span class="thread-stateless-tag">Stateless Direct Connection (Carries full context each turn)</span></div>`
             : binding
               ? `
                 <div class="role-thread-row">
-                  <span class="thread-bound-pill" title="${escapeHtml(binding.threadUrl)}">已绑定专属会话 · ${escapeHtml(boundShort)}</span>
-                  <button class="mini-btn" data-reset-thread-provider="${escapeHtml(m.providerId)}" data-reset-thread-uuid="${escapeHtml(m.uuid)}" type="button" ${saving ? "disabled" : ""}>重置会话</button>
+                  <span class="thread-bound-pill" title="${escapeHtml(binding.threadUrl)}">Bound to Session · ${escapeHtml(boundShort)}</span>
+                  <button class="mini-btn" data-reset-thread-provider="${escapeHtml(m.providerId)}" data-reset-thread-uuid="${escapeHtml(m.uuid)}" type="button" ${saving ? "disabled" : ""}>Reset Session</button>
                 </div>
               `
-              : `<div class="role-thread-row"><span class="thread-unbound-tag">首次发消息时自动创建专属会话（不污染日常聊天）</span></div>`;
+              : `<div class="role-thread-row"><span class="thread-unbound-tag">Creates isolated chat on first message (Keeps everyday chats clean)</span></div>`;
 
           return `
             <div class="role-row">
@@ -1901,7 +1901,7 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
                 maxlength="120"
                 data-role-provider="${escapeHtml(m.providerId)}"
                 data-role-uuid="${escapeHtml(m.uuid)}"
-                placeholder="成员分工（如：前端性能优化与交互评审）"
+                placeholder="Role assignment (e.g., Frontend performance & UI review)"
                 value="${escapeHtml(curRole)}"
                 ${saving ? "disabled" : ""}
               />
@@ -1912,8 +1912,8 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
         .join("");
 
       tabBody = `
-        <div class="modal-desc">配置各成员专属分工指令，并可查看/重置网页成员绑定的群聊独立会话 URL。</div>
-        <div class="role-list">${roleRowsHtml || `<div class="group-picker-empty">暂无成员</div>`}</div>
+        <div class="modal-desc">Configure role assignments for members, and manage isolated group chat session URLs.</div>
+        <div class="role-list">${roleRowsHtml || `<div class="group-picker-empty">No members yet</div>`}</div>
       `;
     } else {
       const snap = kModal.adaptersSnap;
@@ -1924,41 +1924,41 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
         )
         .join("");
       tabBody = `
-        <div class="modal-desc">声明式网站适配器（内置 Muse / Hark 规则，可按需热覆盖选择器）与 Fetch/SSE 只读挂钩协同工作。</div>
-        <div class="adapter-chip-row">${chipsHtml || `<span class="modal-hint">正在读取规则…</span>`}</div>
-        <div class="modal-hint">覆盖规则文件（保存即热生效，无需重编译）：<code>${escapeHtml(snap?.overridePath ?? "site_adapters.json")}</code></div>
+        <div class="modal-desc">Declarative site adapters (Built-in Muse / Hark rules, hot-reloadable) working with Fetch/SSE read hooks.</div>
+        <div class="adapter-chip-row">${chipsHtml || `<span class="modal-hint">Loading rules...</span>`}</div>
+        <div class="modal-hint">Override rules file (hot-reloaded on save, no recompile needed): <code>${escapeHtml(snap?.overridePath ?? "site_adapters.json")}</code></div>
         <textarea
           id="modal-adapters-json-input"
           class="modal-textarea code"
           rows="7"
-          placeholder='可选：输入 JSON 数组覆盖内置规则，例如 [{"id":"muse","name":"Muse","hostPatterns":["muse.ai"],"composerSelectors":["textarea"]}]'
+          placeholder='Optional: JSON array to override built-in rules, e.g. [{"id":"muse","name":"Muse","hostPatterns":["muse.ai"],"composerSelectors":["textarea"]}]'
           ${saving ? "disabled" : ""}
         >${escapeHtml(kModal.adaptersJsonDraft)}</textarea>
         <div class="skill-editor-actions">
-          <button id="modal-adapters-reset-btn" class="mini-btn" type="button" ${saving || !snap?.hasOverrides ? "disabled" : ""}>恢复内置默认</button>
+          <button id="modal-adapters-reset-btn" class="mini-btn" type="button" ${saving || !snap?.hasOverrides ? "disabled" : ""}>Reset to Defaults</button>
         </div>
       `;
     }
 
     const confirmLabel =
       kModal.tab === "adapters"
-        ? saving ? "保存中..." : "保存并热生效"
-        : saving ? "保存中..." : "保存配置";
+        ? saving ? "Saving..." : "Save & Hot-Reload"
+        : saving ? "Saving..." : "Save Settings";
 
     return `
       <div class="${modalOverlayClass()}" role="dialog" aria-modal="true">
         <div class="modal-card group-knowledge-modal-card">
-          <div class="modal-title">共享上下文 & 技能 · ${escapeHtml(latestGroup.name)}</div>
+          <div class="modal-title">Shared Context & Skills · ${escapeHtml(latestGroup.name)}</div>
           <div class="knowledge-tabs">
-            <button class="knowledge-tab ${kModal.tab === "context" ? "active" : ""}" data-knowledge-tab="context" type="button" ${saving ? "disabled" : ""}>共享上下文</button>
-            <button class="knowledge-tab ${kModal.tab === "skills" ? "active" : ""}" data-knowledge-tab="skills" type="button" ${saving ? "disabled" : ""}>共享技能 (${enabledCount})</button>
-            <button class="knowledge-tab ${kModal.tab === "roles" ? "active" : ""}" data-knowledge-tab="roles" type="button" ${saving ? "disabled" : ""}>分工 &amp; 会话</button>
-            <button class="knowledge-tab ${kModal.tab === "adapters" ? "active" : ""}" data-knowledge-tab="adapters" type="button" ${saving ? "disabled" : ""}>站点规则${kModal.adaptersSnap?.hasOverrides ? " *" : ""}</button>
+            <button class="knowledge-tab ${kModal.tab === "context" ? "active" : ""}" data-knowledge-tab="context" type="button" ${saving ? "disabled" : ""}>Shared Context</button>
+            <button class="knowledge-tab ${kModal.tab === "skills" ? "active" : ""}" data-knowledge-tab="skills" type="button" ${saving ? "disabled" : ""}>Shared Skills (${enabledCount})</button>
+            <button class="knowledge-tab ${kModal.tab === "roles" ? "active" : ""}" data-knowledge-tab="roles" type="button" ${saving ? "disabled" : ""}>Roles &amp; Sessions</button>
+            <button class="knowledge-tab ${kModal.tab === "adapters" ? "active" : ""}" data-knowledge-tab="adapters" type="button" ${saving ? "disabled" : ""}>Site Adapters${kModal.adaptersSnap?.hasOverrides ? " *" : ""}</button>
           </div>
           ${tabBody}
           ${kModal.error ? `<div id="modal-error-box" class="update-error-box" role="alert">${escapeHtml(kModal.error)}</div>` : ""}
           <div class="modal-footer">
-            <button id="modal-cancel-btn" class="btn" type="button" ${saving ? "disabled" : ""}>取消</button>
+            <button id="modal-cancel-btn" class="btn" type="button" ${saving ? "disabled" : ""}>Cancel</button>
             <button id="modal-confirm-btn" class="btn primary" type="button" ${saving ? "disabled" : ""}>${confirmLabel}</button>
           </div>
         </div>
@@ -1975,7 +1975,7 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
     ).join("");
     const listHtml =
       agents.length === 0
-        ? `<div class="group-picker-empty">暂未配置 API 或本地 CLI 成员，可点击下方预设或手动添加。</div>`
+        ? `<div class="group-picker-empty">No API or Local CLI members configured. Click a preset or add manually below.</div>`
         : agents
             .map((ext) => {
               const desc =
@@ -1992,8 +1992,8 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
                     </div>
                   </div>
                   <div class="skill-card-ops">
-                    <button class="mini-btn" data-edit-ext-id="${escapeHtml(ext.id)}" type="button" ${saving ? "disabled" : ""}>编辑</button>
-                    <button class="mini-btn danger-text" data-delete-ext-id="${escapeHtml(ext.id)}" type="button" ${saving ? "disabled" : ""}>删除</button>
+                    <button class="mini-btn" data-edit-ext-id="${escapeHtml(ext.id)}" type="button" ${saving ? "disabled" : ""}>Edit</button>
+                    <button class="mini-btn danger-text" data-delete-ext-id="${escapeHtml(ext.id)}" type="button" ${saving ? "disabled" : ""}>Delete</button>
                   </div>
                 </div>
               `;
@@ -2003,44 +2003,44 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
     const fieldsHtml =
       eModal.formKind === "openai_api"
         ? `
-          <input id="ext-agent-url-input" class="modal-input" maxlength="260" placeholder="Base URL（例如 https://api.deepseek.com/v1 或 http://127.0.0.1:11434/v1）" value="${escapeHtml(eModal.baseUrlDraft)}" ${saving ? "disabled" : ""} />
-          <input id="ext-agent-key-input" class="modal-input" maxlength="512" type="password" placeholder="API Key（本机 Ollama 可留空）" value="${escapeHtml(eModal.apiKeyDraft)}" ${saving ? "disabled" : ""} />
-          <input id="ext-agent-model-input" class="modal-input" maxlength="120" placeholder="模型名称（例如 gpt-4o / deepseek-chat / qwen2.5:14b）" value="${escapeHtml(eModal.modelDraft)}" ${saving ? "disabled" : ""} />
+          <input id="ext-agent-url-input" class="modal-input" maxlength="260" placeholder="Base URL (e.g. https://api.openai.com/v1 or http://127.0.0.1:11434/v1)" value="${escapeHtml(eModal.baseUrlDraft)}" ${saving ? "disabled" : ""} />
+          <input id="ext-agent-key-input" class="modal-input" maxlength="512" type="password" placeholder="API Key (can leave empty for local Ollama)" value="${escapeHtml(eModal.apiKeyDraft)}" ${saving ? "disabled" : ""} />
+          <input id="ext-agent-model-input" class="modal-input" maxlength="120" placeholder="Model Name (e.g. gpt-4o, claude-3-7-sonnet, deepseek-chat)" value="${escapeHtml(eModal.modelDraft)}" ${saving ? "disabled" : ""} />
         `
         : `
-          <input id="ext-agent-cmd-input" class="modal-input" maxlength="260" placeholder="CLI 命令（例如 claude / codex / gemini）" value="${escapeHtml(eModal.commandDraft)}" ${saving ? "disabled" : ""} />
-          <input id="ext-agent-args-input" class="modal-input" maxlength="400" placeholder="命令参数，空格分隔（例如 -p 或 exec {prompt}；无 {prompt} 时走 stdin）" value="${escapeHtml(eModal.argsDraft)}" ${saving ? "disabled" : ""} />
-          <input id="ext-agent-workdir-input" class="modal-input" maxlength="260" placeholder="工作目录（选填，例如 /Users/name/project）" value="${escapeHtml(eModal.workdirDraft)}" ${saving ? "disabled" : ""} />
+          <input id="ext-agent-cmd-input" class="modal-input" maxlength="260" placeholder="CLI Command (e.g. claude, codex, gemini)" value="${escapeHtml(eModal.commandDraft)}" ${saving ? "disabled" : ""} />
+          <input id="ext-agent-args-input" class="modal-input" maxlength="400" placeholder="Arguments, space-separated (e.g. -p or exec {prompt}; stdin if no {prompt})" value="${escapeHtml(eModal.argsDraft)}" ${saving ? "disabled" : ""} />
+          <input id="ext-agent-workdir-input" class="modal-input" maxlength="260" placeholder="Working Directory (optional, e.g. C:\Projects\app)" value="${escapeHtml(eModal.workdirDraft)}" ${saving ? "disabled" : ""} />
         `;
 
     return `
       <div class="${modalOverlayClass()}" role="dialog" aria-modal="true">
         <div class="modal-card group-knowledge-modal-card">
-          <div class="modal-title">API / 本地 CLI 混合成员</div>
-          <div class="modal-desc">配置直连 OpenAI 兼容接口或本地 CLI（如 Claude Code / Codex），与网页端账号混编入同一个群聊。</div>
+          <div class="modal-title">API / Local CLI Members</div>
+          <div class="modal-desc">Configure direct OpenAI-compatible APIs or local CLIs (Claude Code / Codex) to collaborate alongside web accounts.</div>
           <div class="ext-agent-list">${listHtml}</div>
           <div class="skill-presets-row">
-            <span class="skill-presets-label">快速填充：</span>
+            <span class="skill-presets-label">Quick Presets:</span>
             ${presetsHtml}
           </div>
           <div class="skill-editor-box">
             <div class="ext-form-head">
-              <span class="skill-editor-title">${eModal.editingId ? "编辑成员" : "新增直连成员"}</span>
+              <span class="skill-editor-title">${eModal.editingId ? "Edit Member" : "Add Direct Member"}</span>
               <div class="ext-kind-switch">
                 <button class="mini-btn ${eModal.formKind === "openai_api" ? "primary-text" : ""}" data-ext-kind="openai_api" type="button" ${saving ? "disabled" : ""}>OpenAI API</button>
-                <button class="mini-btn ${eModal.formKind === "local_cli" ? "primary-text" : ""}" data-ext-kind="local_cli" type="button" ${saving ? "disabled" : ""}>本地 CLI</button>
+                <button class="mini-btn ${eModal.formKind === "local_cli" ? "primary-text" : ""}" data-ext-kind="local_cli" type="button" ${saving ? "disabled" : ""}>Local CLI</button>
               </div>
             </div>
-            <input id="ext-agent-name-input" class="modal-input" maxlength="40" placeholder="群聊显示名称（如：Claude-Code / DeepSeek）" value="${escapeHtml(eModal.nameDraft)}" ${saving ? "disabled" : ""} />
+            <input id="ext-agent-name-input" class="modal-input" maxlength="40" placeholder="Display Name (e.g. Claude-Code, GPT-4o)" value="${escapeHtml(eModal.nameDraft)}" ${saving ? "disabled" : ""} />
             ${fieldsHtml}
             <div class="skill-editor-actions">
-              ${eModal.editingId ? `<button id="ext-agent-cancel-edit-btn" class="mini-btn" type="button" ${saving ? "disabled" : ""}>取消编辑</button>` : ""}
-              <button id="ext-agent-save-btn" class="mini-btn primary-text" type="button" ${saving ? "disabled" : ""}>${saving ? "保存中..." : eModal.editingId ? "更新成员" : "+ 保存成员"}</button>
+              ${eModal.editingId ? `<button id="ext-agent-cancel-edit-btn" class="mini-btn" type="button" ${saving ? "disabled" : ""}>Cancel Edit</button>` : ""}
+              <button id="ext-agent-save-btn" class="mini-btn primary-text" type="button" ${saving ? "disabled" : ""}>${saving ? "Saving..." : eModal.editingId ? "Update Member" : "+ Add Member"}</button>
             </div>
           </div>
           ${eModal.error ? `<div id="modal-error-box" class="update-error-box" role="alert">${escapeHtml(eModal.error)}</div>` : ""}
           <div class="modal-footer">
-            <button id="modal-cancel-btn" class="btn primary" type="button" ${saving ? "disabled" : ""}>完成</button>
+            <button id="modal-cancel-btn" class="btn primary" type="button" ${saving ? "disabled" : ""}>Done</button>
           </div>
         </div>
       </div>
@@ -2050,11 +2050,11 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
     return `
       <div class="${modalOverlayClass()}" role="dialog" aria-modal="true">
         <div class="modal-card">
-          <div class="modal-title">删除群聊「${escapeHtml(modal.group.name)}」</div>
-          <div class="modal-desc">将删除该群聊及本地群聊记录。各成员账号与原生网页历史不受影响。</div>
+          <div class="modal-title">Delete Group \"${escapeHtml(modal.group.name)}\"</div>
+          <div class="modal-desc">This will delete the group and local chat records. Account sessions and web history will not be affected.</div>
           <div class="modal-footer">
-            <button id="modal-cancel-btn" class="btn" type="button">取消</button>
-            <button id="modal-confirm-btn" class="btn danger" type="button">确认删除</button>
+            <button id="modal-cancel-btn" class="btn" type="button">Cancel</button>
+            <button id="modal-confirm-btn" class="btn danger" type="button">Confirm Delete</button>
           </div>
         </div>
       </div>
@@ -2063,11 +2063,11 @@ function renderModal(state: ManagerSnapshot, provider: ProviderInfo): string {
   return `
     <div class="${modalOverlayClass()}" role="dialog" aria-modal="true">
       <div class="modal-card">
-        <div class="modal-title">移除「${escapeHtml(modal.account.alias)}」</div>
-        <div class="modal-desc">将关闭该视图并彻底清除本机独立浏览资料（Cookie 与存储）。云端账号及历史对话仍由官方保留。</div>
+        <div class="modal-title">Remove \"${escapeHtml(modal.account.alias)}\"</div>
+        <div class="modal-desc">This will close the view and clear local isolated data (Cookies and storage). Cloud accounts and official chat histories remain intact.</div>
         <div class="modal-footer">
-          <button id="modal-cancel-btn" class="btn" type="button">取消</button>
-          <button id="modal-confirm-btn" class="btn danger" type="button">确认移除</button>
+          <button id="modal-cancel-btn" class="btn" type="button">Cancel</button>
+          <button id="modal-confirm-btn" class="btn danger" type="button">Confirm Remove</button>
         </div>
       </div>
     </div>
@@ -2086,7 +2086,7 @@ function renderMiddleContent(state: ManagerSnapshot, provider: ProviderInfo): st
     ? `
       <div class="notice-bar">
         <span>${escapeHtml(state.notice)}</span>
-        <button id="dismiss-notice-btn" class="notice-close" type="button" title="关闭提示">✕</button>
+        <button id="dismiss-notice-btn" class="notice-close" type="button" title="Dismiss">✕</button>
       </div>
     `
     : "";
@@ -2095,12 +2095,12 @@ function renderMiddleContent(state: ManagerSnapshot, provider: ProviderInfo): st
     .map(
       (c) => `
       <div class="conflict-box">
-        <div>检测到 UUID 归属冲突（${escapeHtml(c.uuid.slice(0, 8))}…），请选择保留归属服务：</div>
+        <div>Detected UUID ownership conflict（${escapeHtml(c.uuid.slice(0, 8))}…），Please select service to retain:</div>
         <div class="conflict-actions">
           ${c.providers
             .map(
               (pid) =>
-                `<button class="mini-btn" data-resolve-uuid="${escapeHtml(c.uuid)}" data-resolve-provider="${escapeHtml(pid)}" type="button">归属 ${escapeHtml(pid.toUpperCase())}</button>`
+                `<button class="mini-btn" data-resolve-uuid="${escapeHtml(c.uuid)}" data-resolve-provider="${escapeHtml(pid)}" type="button">Assign to ${escapeHtml(pid.toUpperCase())}</button>`
             )
             .join("")}
         </div>
@@ -2111,13 +2111,13 @@ function renderMiddleContent(state: ManagerSnapshot, provider: ProviderInfo): st
 
   const hasUpdate = Boolean(updateState.result?.hasUpdate);
   const mobileSyncBtn = isMobile
-    ? `<button id="sync-btn" class="ghost-icon-btn" type="button" title="多端加密同步">${ICON_SYNC}</button>`
+    ? `<button id="sync-btn" class="ghost-icon-btn" type="button" title="Multi-Device Encrypted Sync">${ICON_SYNC}</button>`
     : "";
   const mobileThemeBtn = isMobile
-    ? `<button id="theme-toggle-btn" class="ghost-icon-btn" type="button" title="主题：${themeLabel(themeMode)}（点击切换）">${themeIcon(themeMode)}</button>`
+    ? `<button id="theme-toggle-btn" class="ghost-icon-btn" type="button" title="Theme: ${themeLabel(themeMode)} (click to toggle)">${themeIcon(themeMode)}</button>`
     : "";
   const mobileUpdateBtn = isMobile
-    ? `<button id="check-update-btn" class="ghost-icon-btn update-trigger-btn ${hasUpdate ? "has-update" : ""}" type="button" title="${hasUpdate ? `发现新版本 v${escapeHtml(updateState.result!.latestVersion)}` : "检查更新"}">${ICON_UPDATE}${hasUpdate ? `<span class="update-dot"></span>` : ""}</button>`
+    ? `<button id="check-update-btn" class="ghost-icon-btn update-trigger-btn ${hasUpdate ? "has-update" : ""}" type="button" title="${hasUpdate ? `New Version v${escapeHtml(updateState.result!.latestVersion)} Available` : "Check for Updates"}">${ICON_UPDATE}${hasUpdate ? `<span class="update-dot"></span>` : ""}</button>`
     : "";
 
   const headerBtnHtml = provider.enabled
@@ -2125,21 +2125,21 @@ function renderMiddleContent(state: ManagerSnapshot, provider: ProviderInfo): st
       ${mobileSyncBtn}
       ${mobileThemeBtn}
       ${mobileUpdateBtn}
-      ${!isMobile ? `<button id="sync-all-btn" class="ghost-icon-btn" type="button" title="刷新已就绪账号额度">${ICON_REFRESH}</button>` : ""}
-      <button id="open-site-btn" class="ghost-icon-btn" type="button" title="在浏览器中打开 ${escapeHtml(provider.shortName)} 官网">${ICON_EXTERNAL}</button>
-      <button id="add-account-btn" class="icon-btn primary" type="button">+ 新增</button>
+      ${!isMobile ? `<button id="sync-all-btn" class="ghost-icon-btn" type="button" title="Refresh Active Account Quotas">${ICON_REFRESH}</button>` : ""}
+      <button id="open-site-btn" class="ghost-icon-btn" type="button" title="Open official site in browser">${ICON_EXTERNAL}</button>
+      <button id="add-account-btn" class="icon-btn primary" type="button">+ Add</button>
     `
-    : `${mobileSyncBtn}${mobileThemeBtn}${mobileUpdateBtn}<button id="open-site-btn" class="icon-btn primary" type="button">打开官网 ${ICON_EXTERNAL}</button>`;
+    : `${mobileSyncBtn}${mobileThemeBtn}${mobileUpdateBtn}<button id="open-site-btn" class="icon-btn primary" type="button">Open Site ${ICON_EXTERNAL}</button>`;
 
   const listToolbarHtml =
     provider.enabled && providerAccounts.length >= 2 && state.conflicts.length === 0
       ? `
         <div class="list-toolbar">
-          <button id="smart-switch-btn" class="toolbar-chip" type="button" title="切换到剩余可用额度最多的账号">
-            ${ICON_BOLT}<span>切到余量最多</span>
+          <button id="smart-switch-btn" class="toolbar-chip" type="button" title="Switch to account with highest available quota">
+            ${ICON_BOLT}<span>Highest Quota</span>
           </button>
-          <button id="sort-quota-btn" class="toolbar-chip" type="button" title="按剩余可用额度从高到低排序">
-            ${ICON_SORT}<span>按额度排序</span>
+          <button id="sort-quota-btn" class="toolbar-chip" type="button" title="Sort accounts by remaining quota descending">
+            ${ICON_SORT}<span>Sort by Quota</span>
           </button>
         </div>
       `
@@ -2150,16 +2150,16 @@ function renderMiddleContent(state: ManagerSnapshot, provider: ProviderInfo): st
     listBody = `
       <div class="empty-list">
         <div class="empty-icon-circle">${renderProviderLogo(provider)}</div>
-        <div><strong>${escapeHtml(provider.name)}</strong> 暂未开放内嵌会话</div>
-        <div>待核验官方网页直登路径与嵌入条款后启用，可点击右上角访问官网。</div>
+        <div><strong>${escapeHtml(provider.name)}</strong> Embedded session not available yet</div>
+        <div>Will be enabled after verifying official web login and embedding policies.</div>
       </div>
     `;
   } else if (providerAccounts.length === 0) {
     listBody = `
       <div class="empty-list">
         <div class="empty-icon-circle">${ICON_USER_PLUS}</div>
-        <div>暂无 ${escapeHtml(provider.shortName)} 账号</div>
-        <div>点击右上角「+ 新增」创建独立登录环境</div>
+        <div>No ${escapeHtml(provider.shortName)} accounts yet</div>
+        <div>Click \"+ Add\" at top right to create an isolated environment</div>
       </div>
     `;
   } else {
@@ -2187,43 +2187,43 @@ function renderMiddleContent(state: ManagerSnapshot, provider: ProviderInfo): st
         const isMac = navigator.userAgent.includes("Mac");
         const shortcutHint =
           !isMobile && idx < 9
-            ? `<span class="shortcut-pill" title="快捷切号">${isMac ? "⌘" : "^"}${idx + 1}</span>`
+            ? `<span class="shortcut-pill" title="Quick Switch">${isMac ? "⌘" : "^"}${idx + 1}</span>`
             : "";
         const proxyBadgeHtml =
           supportsProxy && acc.proxyUrl
-            ? `<span class="proxy-pill" title="代理：${escapeHtml(acc.proxyUrl)}">代理</span>`
+            ? `<span class="proxy-pill" title="Proxy: ${escapeHtml(acc.proxyUrl)}">Proxy</span>`
             : "";
         const timezoneBadgeHtml = acc.timezone
-          ? `<span class="proxy-pill" title="时区：${escapeHtml(acc.timezone)}">${escapeHtml(acc.timezone)}</span>`
+          ? `<span class="proxy-pill" title="Timezone: ${escapeHtml(acc.timezone)}">${escapeHtml(acc.timezone)}</span>`
           : "";
         const alertBadgeHtml = switching
-          ? `<span class="loading-status-badge">加载中…</span>`
+          ? `<span class="loading-status-badge">Loading...</span>`
           : isLoggedOut
-            ? `<span class="auth-status-badge">未登录</span>`
+            ? `<span class="auth-status-badge">Logged Out</span>`
             : hasPageError
-              ? `<span class="auth-status-badge error">状态异常</span>`
+              ? `<span class="auth-status-badge error">Error State</span>`
               : alertStatus !== "normal"
                 ? `<span class="quota-warning-badge ${alertStatus}">${alertLabel}</span>`
                 : "";
 
         let compactSubHtml = "";
         if (switching && !hasDetail && !hasPageError) {
-          compactSubHtml = `<div class="account-sub loading-text"><span class="quota-label-text">正在加载…</span></div>`;
+          compactSubHtml = `<div class="account-sub loading-text"><span class="quota-label-text">Loading...</span></div>`;
         } else if (isLoggedOut) {
           const loginHint = active
             ? isMobile
-              ? "登录已失效，点击进入重新登录"
-              : "登录已失效，请在右侧重新登录"
+              ? "Session expired, tap to re-login"
+              : "Session expired, please re-login on the right"
             : acc.autoAlias
-              ? "尚未登录，点击前往登录"
-              : "登录已失效，点击重新登录";
+              ? "Not logged in, click to log in"
+              : "Session expired, click to re-login";
           compactSubHtml = `<div class="account-sub auth-logged-out"><span class="auth-dot-inline"></span><span class="quota-label-text">${loginHint}</span></div>`;
         } else if (hasPageError) {
-          compactSubHtml = `<div class="account-sub auth-page-error"><span class="auth-dot-inline error"></span><span class="quota-label-text">${escapeHtml(pageError!)}</span><button class="inline-relogin-btn" data-relogin-uuid="${escapeHtml(acc.uuid)}" type="button">清理重登</button></div>`;
+          compactSubHtml = `<div class="account-sub auth-page-error"><span class="auth-dot-inline error"></span><span class="quota-label-text">${escapeHtml(pageError!)}</span><button class="inline-relogin-btn" data-relogin-uuid="${escapeHtml(acc.uuid)}" type="button">Re-login</button></div>`;
         } else if (!hasDetail) {
           const fallbackLabel = acc.autoAlias
-            ? "登录后自动同步额度"
-            : "正在同步额度明细…";
+            ? "Quota syncs after login"
+            : "Syncing quota details...";
           const quotaLabel = acc.quotaText ?? fallbackLabel;
           const isEmpty =
             acc.quotaPercent === 0 || Boolean(acc.quotaText?.includes("用尽"));
@@ -2269,7 +2269,7 @@ function renderMiddleContent(state: ManagerSnapshot, provider: ProviderInfo): st
           !hasPageError &&
           acc.authState === "authenticated" &&
           acc.autoAlias &&
-          acc.alias === "已登录账号";
+          acc.alias === "已登录账号" || acc.alias === "Logged In Account";
 
         return `
           <div class="${rowClass}" data-switch-uuid="${escapeHtml(acc.uuid)}" ${!isMobile && canReorder ? `draggable="true"` : ""}>
@@ -2287,27 +2287,27 @@ function renderMiddleContent(state: ManagerSnapshot, provider: ProviderInfo): st
                   ${timezoneBadgeHtml}
                   ${alertBadgeHtml}
                 </div>
-                ${showManualAliasHint ? `<div class="alias-manual-hint"><span>未获取到邮箱</span><button class="inline-rename-link" data-rename-uuid="${escapeHtml(acc.uuid)}" type="button">手动改名</button></div>` : ""}
+                ${showManualAliasHint ? `<div class="alias-manual-hint"><span>Email not detected</span><button class="inline-rename-link" data-rename-uuid="${escapeHtml(acc.uuid)}" type="button">Rename</button></div>` : ""}
                 ${compactSubHtml}
                 ${!hasDetail && !isLoggedOut && !hasPageError && !switching && cookieInfo ? `<div class="cookie-expiry-line inline ${cookieInfo.tone}" title="${escapeHtml(cookieInfo.tooltip)}"><span class="cookie-expiry-dot"></span><span>${escapeHtml(cookieInfo.shortText)}</span></div>` : ""}
               </div>
               <div class="row-ops">
                 ${canReorder ? `
                   <div class="reorder-stack">
-                    <button class="reorder-btn" data-move-uuid="${escapeHtml(acc.uuid)}" data-move-dir="up" title="上移" aria-label="上移" type="button" ${idx === 0 ? "disabled" : ""}>▲</button>
-                    <button class="reorder-btn" data-move-uuid="${escapeHtml(acc.uuid)}" data-move-dir="down" title="下移" aria-label="下移" type="button" ${idx === providerAccounts.length - 1 ? "disabled" : ""}>▼</button>
+                    <button class="reorder-btn" data-move-uuid="${escapeHtml(acc.uuid)}" data-move-dir="up" title="Move Up" aria-label="Move Up" type="button" ${idx === 0 ? "disabled" : ""}>▲</button>
+                    <button class="reorder-btn" data-move-uuid="${escapeHtml(acc.uuid)}" data-move-dir="down" title="Move Down" aria-label="Move Down" type="button" ${idx === providerAccounts.length - 1 ? "disabled" : ""}>▼</button>
                   </div>
                 ` : ""}
                 ${!isMobile ? `
-                  <button class="action-icon-btn ${switching ? "spinning" : ""}" data-reload-uuid="${escapeHtml(acc.uuid)}" title="强制刷新页面" type="button" ${switching ? "disabled" : ""}>${ICON_REFRESH}</button>
+                  <button class="action-icon-btn ${switching ? "spinning" : ""}" data-reload-uuid="${escapeHtml(acc.uuid)}" title="Force Reload Page" type="button" ${switching ? "disabled" : ""}>${ICON_REFRESH}</button>
                 ` : ""}
                 ${supportsCookieCopy ? `
-                  <button class="action-icon-btn copy-cookie-btn" data-copy-cookie-uuid="${escapeHtml(acc.uuid)}" data-copy-label="复制 Cookie" aria-label="复制 Cookie" type="button">
+                  <button class="action-icon-btn copy-cookie-btn" data-copy-cookie-uuid="${escapeHtml(acc.uuid)}" data-copy-label="Copy Cookie" aria-label="Copy Cookie" type="button">
                     <span class="copy-cookie-icon" aria-hidden="true"></span>
                   </button>
                 ` : ""}
-                <button class="action-icon-btn" data-rename-uuid="${escapeHtml(acc.uuid)}" title="账号设置" type="button">${ICON_EDIT}</button>
-                <button class="action-icon-btn danger" data-remove-uuid="${escapeHtml(acc.uuid)}" title="从本机移除" type="button">${ICON_TRASH}</button>
+                <button class="action-icon-btn" data-rename-uuid="${escapeHtml(acc.uuid)}" title="Account Settings" type="button">${ICON_EDIT}</button>
+                <button class="action-icon-btn danger" data-remove-uuid="${escapeHtml(acc.uuid)}" title="Remove from Device" type="button">${ICON_TRASH}</button>
               </div>
             </div>
             ${!isLoggedOut && !hasPageError && acc.quotaDetail ? renderQuotaDetailPanel(acc.quotaDetail, alertStatus, extraDepleted) : ""}
@@ -2347,15 +2347,15 @@ function renderDownloadToast(): string {
   const isDone = downloadToast.status === "completed";
   const isFail = downloadToast.status === "failed";
   const label = isStarted
-    ? `正在下载：${downloadToast.filename}`
+    ? `Downloading: ${downloadToast.filename}`
     : isDone
-      ? `下载完成：${downloadToast.filename}`
-      : `下载失败：${downloadToast.filename}${downloadToast.error ? `（${downloadToast.error}）` : ""}`;
+      ? `Downloaded: ${downloadToast.filename}`
+      : `Download failed: ${downloadToast.filename}${downloadToast.error ? `（${downloadToast.error}）` : ""}`;
   return `
     <div id="download-toast" class="download-toast ${isFail ? "error" : isDone ? "success" : ""}" role="status" aria-live="polite">
       <span class="download-toast-text" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
-      ${isDone ? `<button id="download-reveal-btn" class="download-toast-action" data-download-id="${downloadToast.id}" type="button">在文件夹中显示</button>` : ""}
-      <button id="download-close-btn" class="download-toast-close" type="button" aria-label="关闭下载提示">✕</button>
+      ${isDone ? `<button id="download-reveal-btn" class="download-toast-action" data-download-id="${downloadToast.id}" type="button">Show in Folder</button>` : ""}
+      <button id="download-close-btn" class="download-toast-close" type="button" aria-label="Close">✕</button>
     </div>
   `;
 }
@@ -2377,8 +2377,8 @@ function renderRightStage(state: ManagerSnapshot, provider: ProviderInfo): strin
             <span class="stage-orbit-ring"></span>
             <div class="stage-logo-tile">${renderProviderLogo(provider)}</div>
           </div>
-          <div class="placeholder-title">正在加载「${escapeHtml(targetName)}」</div>
-          <div class="placeholder-desc">首次打开正在渲染 ${escapeHtml(provider.shortName)} 页面，加载完成后再次切换将瞬间直达…</div>
+          <div class="placeholder-title">Loading \"${escapeHtml(targetName)}\"</div>
+          <div class="placeholder-desc">Rendering ${escapeHtml(provider.shortName)} for the first time. Subsequent switches will be instant...</div>
           <div class="progress-track"><div class="progress-bar"></div></div>
         </div>
       </main>
@@ -2390,9 +2390,9 @@ function renderRightStage(state: ManagerSnapshot, provider: ProviderInfo): strin
       <main class="right-placeholder">
         <div class="stage-card">
           <div class="stage-logo-tile">${renderProviderLogo(provider)}</div>
-          <div class="placeholder-title">${escapeHtml(provider.name)} · 待接入</div>
-          <div class="placeholder-desc">首版暂未启用应用内嵌会话。访问官网不会覆盖上次已打开的账号记录。</div>
-          <button id="stage-open-site-btn" class="btn primary" type="button">打开 ${escapeHtml(provider.shortName)} 官网</button>
+          <div class="placeholder-title">${escapeHtml(provider.name)} · Coming Soon</div>
+          <div class="placeholder-desc">Embedded session not enabled yet. Visiting the official site will not overwrite existing accounts.</div>
+          <button id="stage-open-site-btn" class="btn primary" type="button">Open ${escapeHtml(provider.shortName)} Site</button>
         </div>
       </main>
     `;
@@ -2403,8 +2403,8 @@ function renderRightStage(state: ManagerSnapshot, provider: ProviderInfo): strin
       <div class="stage-card">
         <div class="stage-logo-tile">${renderProviderLogo(provider)}</div>
         <div class="placeholder-title">${escapeHtml(provider.name)}</div>
-        <div class="placeholder-desc">从左侧选择一个账号进入对话，或新建账号开启独立隔离登录。</div>
-        <button id="stage-add-btn" class="btn primary" type="button">+ 新增 ${escapeHtml(provider.shortName)} 账号</button>
+        <div class="placeholder-desc">Select an account from the left to start chatting, or add a new account for isolated browsing.</div>
+        <button id="stage-add-btn" class="btn primary" type="button">+ Add ${escapeHtml(provider.shortName)} Account</button>
       </div>
     </main>
   `;
@@ -2413,7 +2413,7 @@ function renderRightStage(state: ManagerSnapshot, provider: ProviderInfo): strin
 async function openCreateGroupModal(state: ManagerSnapshot): Promise<void> {
   await setModal({
     kind: "group",
-    nameDraft: `群聊 ${state.groupChats.length + 1}`,
+    nameDraft: `Group ${state.groupChats.length + 1}`,
     selectedMembers: [],
   });
 }
@@ -2470,7 +2470,7 @@ function isAsciiWordChar(ch: string | undefined): boolean {
   return Boolean(ch && /^[A-Za-z0-9_]$/.test(ch));
 }
 
-const ALL_MENTION_KEYWORDS = ["全体成员", "所有人", "全体", "all"];
+const ALL_MENTION_KEYWORDS = ["all", "everyone", "全体成员", "所有人", "全体"];
 
 function scanTextMentions<T extends { alias: string }>(
   text: string,
@@ -2530,7 +2530,7 @@ function extractComposerAtMentions(
     return { hasMention: false, isAll: false, targets: [], labels: [] };
   }
   if (hits.some((h) => h.isAll)) {
-    return { hasMention: true, isAll: true, targets: [], labels: ["全体成员"] };
+    return { hasMention: true, isAll: true, targets: [], labels: ["All Members"] };
   }
   const targets: AccountKey[] = [];
   const labels: string[] = [];
@@ -2572,11 +2572,11 @@ function formatReviewStageChain(labels: string[]): string {
     .map((label, idx) => {
       const stage =
         idx === 0
-          ? "初稿"
+          ? "Draft"
           : idx === labels.length - 1 && labels.length >= 3
-            ? "综合定稿"
-            : "交叉评审";
-      return `${label}（${stage}）`;
+            ? "Final Synthesis"
+            : "Cross Review";
+      return `${label} (${stage})`;
     })
     .join(" → ");
 }
@@ -2592,13 +2592,13 @@ function formatComposerHintText(
   const inline = extractComposerAtMentions(draft, members);
   const modeSuffix =
     workflowMode === "review"
-      ? " · 评审流（初稿 → 评审 → 定稿）"
+      ? " · Review Flow (Draft -> Review -> Synthesis)"
       : workflowMode === "a2a_relay"
-        ? ` · A2A接力（最多 ${maxRelayHops} 跳）`
+        ? ` · A2A Relay (Max ${maxRelayHops} hops)`
         : "";
   if (inline.hasMention) {
     if (inline.isAll) {
-      return `检测到 @全体成员：将按排队限流向全员转发${modeSuffix}`;
+      return `Detected @All Members: Forwarding to all members with rate limiting${modeSuffix}`;
     }
     const inlineCats = new Set(
       inline.targets
@@ -2609,18 +2609,18 @@ function formatComposerHintText(
     if (workflowMode === "review") {
       const reviewLabels = [
         ...inline.labels.map((l) => `@${l}`),
-        ...extraAuto.map((c) => `${c.label}(自动)`),
+        ...extraAuto.map((c) => `${c.label} (Auto)`),
       ];
       if (reviewLabels.length >= 2) {
-        return `检测到正文 @，评审流顺序：${formatReviewStageChain(reviewLabels)}`;
+        return `Detected @mentions, Review sequence: ${formatReviewStageChain(reviewLabels)}`;
       }
     }
     if (extraAuto.length > 0) {
-      return `检测到正文 @${inline.labels.join("、@")}：将同时转发给 ${extraAuto
-        .map((c) => `${c.label}(自动选号)`)
+      return `Detected @${inline.labels.join(" · @")}: Forwarding to  ${extraAuto
+        .map((c) => `${c.label}(Auto-routed)`)
         .join("、")}${modeSuffix}`;
     }
-    return `检测到正文 @${inline.labels.join("、@")}：将仅转发给被提及成员${modeSuffix}`;
+    return `Detected @${inline.labels.join(" · @")}: Forwarding only to mentioned members${modeSuffix}`;
   }
   const hasExplicit = selectedTargets.length > 0;
   const hasAuto = selectedAutoChannels.length > 0;
@@ -2632,20 +2632,20 @@ function formatComposerHintText(
       );
     }
     for (const ac of selectedAutoChannels) {
-      parts.push(`${ac.label}(自动按额度选号)`);
+      parts.push(`${ac.label}(Auto-select by quota)`);
     }
     if (workflowMode === "review" && parts.length >= 2) {
-      return `评审流顺序：${formatReviewStageChain(parts)}`;
+      return `Review sequence: ${formatReviewStageChain(parts)}`;
     }
-    return `仅向 ${parts.join("、")} 发送${modeSuffix}`;
+    return `Sending only to ${parts.join(" · ")}${modeSuffix}`;
   }
   if (workflowMode === "review") {
-    return "评审流模式：按成员顺序串行执行（初稿 → 交叉评审 → 综合定稿）；按顺序点选上方成员或在正文按顺序 @ 可自定义先后顺序";
+    return "Review Flow: Serial execution (Draft -> Cross Review -> Final Synthesis). Order members above or via @mentions.";
   }
   if (workflowMode === "a2a_relay") {
-    return `A2A 接力模式：成员回复正文包含 @成员 将自动触发下一跳（上限 ${maxRelayHops} 跳）`;
+    return `A2A Relay: When a member @mentions another member, it triggers the next hop (Up to ${maxRelayHops} hops).`;
   }
-  return "向全体成员发送（输入 @ 可点名，Enter 发送，Shift+Enter 换行）";
+  return "Send to all members (type @ to mention, Enter to send, Shift+Enter for new line)";
 }
 
 function renderGroupMiddleContent(state: ManagerSnapshot, provider: ProviderInfo): string {
@@ -2653,7 +2653,7 @@ function renderGroupMiddleContent(state: ManagerSnapshot, provider: ProviderInfo
     ? `
       <div class="notice-bar">
         <span>${escapeHtml(state.notice)}</span>
-        <button id="dismiss-notice-btn" class="notice-close" type="button" title="关闭提示">✕</button>
+        <button id="dismiss-notice-btn" class="notice-close" type="button" title="Dismiss">✕</button>
       </div>
     `
     : "";
@@ -2665,8 +2665,8 @@ function renderGroupMiddleContent(state: ManagerSnapshot, provider: ProviderInfo
       ? `
         <div class="empty-list">
           <div class="empty-icon-circle">${ICON_GROUP}</div>
-          <div>暂无群聊</div>
-          <div>点击右上角「+ 创建群聊」，可混编网页账号与 API / CLI 成员协同对话</div>
+          <div>No group chats yet</div>
+          <div>Click \"+ Create Group\" above to collaborate across Web, API, and CLI agents</div>
         </div>
       `
       : state.groupChats
@@ -2682,15 +2682,15 @@ function renderGroupMiddleContent(state: ManagerSnapshot, provider: ProviderInfo
               : "";
             const preview = lastMsg
               ? lastMsg.status === "needs_auth"
-                ? `[待授权] ${lastSenderName}`
+                ? `[Needs Auth] ${lastSenderName}`
                 : lastMsg.role === "user"
-                  ? `我: ${lastMsg.content}`
+                  ? `Me: ${lastMsg.content}`
                   : lastMsg.status === "queued"
-                    ? `${lastSenderName}: 排队等待回复…`
+                    ? `${lastSenderName}: Queued for reply...`
                     : lastMsg.content
                       ? `${lastSenderName}: ${lastMsg.content}`
-                      : `${lastSenderName} 正在回复…`
-              : `${g.members.length} 位成员 · 点击开始群聊`;
+                      : `${lastSenderName} Replying...`
+              : `${g.members.length} members · Click to open chat`;
 
             const avatarStack = g.members
               .slice(0, 3)
@@ -2699,7 +2699,7 @@ function renderGroupMiddleContent(state: ManagerSnapshot, provider: ProviderInfo
                 return renderMemberAvatarNode(
                   state,
                   meta.acc,
-                  meta.alias || "成员",
+                  meta.alias || "Member",
                   "group-mini-avatar",
                   meta.ext?.kind
                 );
@@ -2709,19 +2709,19 @@ function renderGroupMiddleContent(state: ManagerSnapshot, provider: ProviderInfo
             return `
               <div class="group-row ${active ? "active" : ""}" data-select-group-id="${escapeHtml(g.id)}">
                 <div class="group-avatar-stack">
-                  ${avatarStack || `<div class="avatar custom group-mini-avatar">群</div>`}
+                  ${avatarStack || `<div class="avatar custom group-mini-avatar">Grp</div>`}
                 </div>
                 <div class="group-row-meta">
                   <div class="group-row-top">
                     <span class="account-alias">${escapeHtml(g.name)}</span>
-                    <span class="group-count-pill">${g.members.length}人</span>
-                    ${hasNeedsAuth ? `<span class="quota-warning-badge low">待授权</span>` : isStreaming ? `<span class="loading-status-badge">回复中</span>` : ""}
+                    <span class="group-count-pill">${g.members.length}</span>
+                    ${hasNeedsAuth ? `<span class="quota-warning-badge low">Auth Required</span>` : isStreaming ? `<span class="loading-status-badge">Replying</span>` : ""}
                   </div>
                   <div class="group-row-preview">${escapeHtml(preview)}</div>
                 </div>
                 <div class="row-ops">
-                  <button class="action-icon-btn" data-edit-group-id="${escapeHtml(g.id)}" title="编辑群成员与名称" type="button">${ICON_EDIT}</button>
-                  <button class="action-icon-btn danger" data-delete-group-id="${escapeHtml(g.id)}" title="删除群聊" type="button">${ICON_TRASH}</button>
+                  <button class="action-icon-btn" data-edit-group-id="${escapeHtml(g.id)}" title="Edit Group & Members" type="button">${ICON_EDIT}</button>
+                  <button class="action-icon-btn danger" data-delete-group-id="${escapeHtml(g.id)}" title="Delete Group" type="button">${ICON_TRASH}</button>
                 </div>
               </div>
             `;
@@ -2731,12 +2731,12 @@ function renderGroupMiddleContent(state: ManagerSnapshot, provider: ProviderInfo
   return `
     <div class="column-header">
       <div class="provider-title-wrap">
-        <span class="provider-title">多账号群聊</span>
+        <span class="provider-title">Multi-Agent Chat</span>
         ${state.groupChats.length > 0 ? `<span class="count-badge">${state.groupChats.length}</span>` : ""}
       </div>
       <div class="header-actions">
-        <button id="manage-external-agents-btn" class="icon-btn ext-header-btn" type="button" title="管理直连 OpenAI API 与本地 CLI 成员">API/CLI${extCount > 0 ? ` (${extCount})` : ""}</button>
-        <button id="create-group-btn" class="icon-btn primary" type="button">+ 创建群聊</button>
+        <button id="manage-external-agents-btn" class="icon-btn ext-header-btn" type="button" title="Manage OpenAI API & Local CLI members">API/CLI${extCount > 0 ? ` (${extCount})` : ""}</button>
+        <button id="create-group-btn" class="icon-btn primary" type="button">+ Create Group</button>
       </div>
     </div>
     ${noticeHtml}
@@ -2779,10 +2779,10 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
       <main class="right-placeholder">
         <div class="stage-card">
           <div class="stage-logo-tile group-stage-icon">${ICON_GROUP}</div>
-          <div class="placeholder-title">创建你的跨服务 AI 群聊</div>
-          <div class="placeholder-desc">支持 Muse / Hark 网页账号与 OpenAI API / 本地 CLI 混编入群，内置并行、评审流、A2A 接力与独立会话绑定。</div>
+          <div class="placeholder-title">Create a Multi-Agent AI Group Chat</div>
+          <div class="placeholder-desc">Collaborate across Web, API, and CLI agents with Parallel, Review Flow, and A2A Relay modes.</div>
           <div class="stage-card-actions">
-            <button id="stage-create-group-btn" class="btn primary" type="button">+ 创建群聊</button>
+            <button id="stage-create-group-btn" class="btn primary" type="button">+ Create Group</button>
           </div>
         </div>
       </main>
@@ -2870,8 +2870,8 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
     activeGroup.messages.length === 0
       ? `
         <div class="group-empty-chat">
-          <div class="group-empty-title">群聊已就绪</div>
-          <div class="group-empty-desc">可在下方切换「并行」「评审流」或「A2A 接力」协作模式；输入 @ 可模糊点名，网页成员将自动绑定独立专属会话。</div>
+          <div class="group-empty-title">Group Chat Ready</div>
+          <div class="group-empty-desc">Switch between Parallel, Review Flow, or A2A Relay modes below. Type @ to mention members.</div>
         </div>
       `
       : activeGroup.messages
@@ -2892,9 +2892,9 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
                   <div class="group-bubble user">
                     ${targetSummary}
                     <div class="group-msg-text">${renderMessageTextWithMentions(msg.content, memberAliases)}</div>
-                    <div class="group-msg-foot">${formatShortTime(msg.createdAtMs)} · 已转发</div>
+                    <div class="group-msg-foot">${formatShortTime(msg.createdAtMs)} · Forwarded</div>
                     <div class="group-save-ctx-wrap">
-                      <button class="group-pin-icon-btn" data-pin-msg-id="${escapeHtml(msg.id)}" data-tooltip="沉淀到共享上下文" aria-label="沉淀到共享上下文" type="button">${ICON_PIN}</button>
+                      <button class="group-pin-icon-btn" data-pin-msg-id="${escapeHtml(msg.id)}" data-tooltip="Pin to Shared Context" aria-label="Pin to Shared Context" type="button">${ICON_PIN}</button>
                     </div>
                   </div>
                 </div>
@@ -2911,15 +2911,15 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
               : "";
             const statusPill =
               msg.status === "queued"
-                ? `<span class="group-status-pill queued">排队中…</span>`
+                ? `<span class="group-status-pill queued">Queued...</span>`
                 : msg.status === "sending"
-                  ? `<span class="group-status-pill sending">投递中…</span>`
+                  ? `<span class="group-status-pill sending">Sending...</span>`
                   : msg.status === "streaming"
-                    ? `<span class="group-status-pill streaming">回复中…</span>`
+                    ? `<span class="group-status-pill streaming">Streaming...</span>`
                     : msg.status === "needs_auth"
-                      ? `<span class="group-status-pill warn">待授权确认</span>`
+                      ? `<span class="group-status-pill warn">Needs Auth</span>`
                       : msg.status === "error"
-                        ? `<span class="group-status-pill err">未完成</span>`
+                        ? `<span class="group-status-pill err">Failed</span>`
                         : "";
             const stagePill = msg.stageLabel
               ? `<span class="group-stage-pill">${escapeHtml(msg.stageLabel)}</span>`
@@ -2928,9 +2928,9 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
             const bodyContent = msg.content.trim()
               ? `<div class="group-msg-text">${renderMessageTextWithMentions(msg.content, memberAliases)}</div>`
               : msg.status === "queued"
-                ? `<div class="group-msg-pending">等待前序阶段或槽位释放后唤醒…</div>`
+                ? `<div class="group-msg-pending">Waiting for prior stage or slot to open...</div>`
                 : msg.status === "sending" || msg.status === "streaming"
-                  ? `<div class="group-msg-pending">${meta?.isExternal ? "正在直连执行并流式接收回复…" : "正在该账号原生对话中生成回复…"}</div>`
+                  ? `<div class="group-msg-pending">${meta?.isExternal ? "Executing direct API/CLI call..." : "Generating response in native account session..."}</div>`
                   : "";
 
             const canSyncReply = Boolean(
@@ -2942,10 +2942,10 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
             );
             const isSyncing = syncingMsgIds.has(msg.id);
             const syncBtnHtml = canSyncReply
-              ? `<button class="group-pin-icon-btn ${isSyncing ? "is-spinning" : ""}" data-sync-msg-id="${escapeHtml(msg.id)}" data-tooltip="同步最新回复（不重发）" aria-label="同步最新回复" type="button" ${isSyncing ? "disabled" : ""}>${ICON_REFRESH}</button>`
+              ? `<button class="group-pin-icon-btn ${isSyncing ? "is-spinning" : ""}" data-sync-msg-id="${escapeHtml(msg.id)}" data-tooltip="Sync latest reply (without resending)" aria-label="Sync Reply" type="button" ${isSyncing ? "disabled" : ""}>${ICON_REFRESH}</button>`
               : "";
             const pinBtnHtml = msg.content.trim()
-              ? `<button class="group-pin-icon-btn" data-pin-msg-id="${escapeHtml(msg.id)}" data-tooltip="沉淀到共享上下文" aria-label="沉淀到共享上下文" type="button">${ICON_PIN}</button>`
+              ? `<button class="group-pin-icon-btn" data-pin-msg-id="${escapeHtml(msg.id)}" data-tooltip="Pin to Shared Context" aria-label="Pin to Shared Context" type="button">${ICON_PIN}</button>`
               : "";
             const pinHoverAction =
               syncBtnHtml || pinBtnHtml
@@ -2956,11 +2956,11 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
               msg.status === "needs_auth"
                 ? `
                   <div class="group-auth-card">
-                    <span>${escapeHtml(msg.error || "检测到安全授权弹窗，请切到该账号确认后重试")}</span>
+                    <span>${escapeHtml(msg.error || "Security permission dialog detected, please switch to this account to approve")}</span>
                     <div class="group-error-ops">
-                      <button class="mini-btn primary-text" data-retry-msg-id="${escapeHtml(msg.id)}" type="button">重试</button>
-                      ${canSyncReply ? `<button class="mini-btn" data-sync-msg-id="${escapeHtml(msg.id)}" type="button" ${isSyncing ? "disabled" : ""}>${isSyncing ? "同步中…" : "同步回复"}</button>` : ""}
-                      ${senderKey ? `<button class="mini-btn warn-btn" type="button" ${jumpAttrs}>前往该账号授权 →</button>` : ""}
+                      <button class="mini-btn primary-text" data-retry-msg-id="${escapeHtml(msg.id)}" type="button">Retry</button>
+                      ${canSyncReply ? `<button class="mini-btn" data-sync-msg-id="${escapeHtml(msg.id)}" type="button" ${isSyncing ? "disabled" : ""}>${isSyncing ? "Syncing..." : "Sync Reply"}</button>` : ""}
+                      ${senderKey ? `<button class="mini-btn warn-btn" type="button" ${jumpAttrs}>Go to Account to Authorize →</button>` : ""}
                     </div>
                   </div>
                 `
@@ -2969,9 +2969,9 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
                     <div class="group-error-box">
                       <span>${escapeHtml(msg.error)}</span>
                       <div class="group-error-ops">
-                        <button class="mini-btn primary-text" data-retry-msg-id="${escapeHtml(msg.id)}" type="button">重试</button>
-                        ${canSyncReply ? `<button class="mini-btn" data-sync-msg-id="${escapeHtml(msg.id)}" type="button" ${isSyncing ? "disabled" : ""}>${isSyncing ? "同步中…" : "同步回复"}</button>` : ""}
-                        ${senderKey ? `<button class="mini-btn" type="button" ${jumpAttrs}>${meta?.isExternal ? "检查配置" : "前往查看"}</button>` : ""}
+                        <button class="mini-btn primary-text" data-retry-msg-id="${escapeHtml(msg.id)}" type="button">Retry</button>
+                        ${canSyncReply ? `<button class="mini-btn" data-sync-msg-id="${escapeHtml(msg.id)}" type="button" ${isSyncing ? "disabled" : ""}>${isSyncing ? "Syncing..." : "Sync Reply"}</button>` : ""}
+                        ${senderKey ? `<button class="mini-btn" type="button" ${jumpAttrs}>${meta?.isExternal ? "Check Config" : "View Account"}</button>` : ""}
                       </div>
                     </div>
                   `
@@ -2979,14 +2979,14 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
 
             return `
               <div class="group-msg assistant">
-                <button class="group-msg-avatar-btn" type="button" title="${meta?.isExternal ? `点击编辑「${escapeHtml(senderDisplayName)}」配置` : `点击切换到「${escapeHtml(senderDisplayName)}」原生会话页`}" ${jumpAttrs}>
+                <button class="group-msg-avatar-btn" type="button" title="${meta?.isExternal ? `Click to edit \"${escapeHtml(senderDisplayName)}\" config` : `Click to switch to \"${escapeHtml(senderDisplayName)}\" native session`}" ${jumpAttrs}>
                   ${renderMemberAvatarNode(state, meta?.acc, senderDisplayName, "", meta?.ext?.kind)}
                 </button>
                 <div class="group-msg-col">
                   <div class="group-msg-head">
                     <span class="group-msg-name">${escapeHtml(senderDisplayName)}</span>
                     ${meta ? `<span class="group-provider-tag">${escapeHtml(meta.providerShort)}</span>` : ""}
-                    ${msg.autoRoutedChannel ? `<span class="group-auto-pill" title="由渠道按剩余额度自动选号">自动选号</span>` : ""}
+                    ${msg.autoRoutedChannel ? `<span class="group-auto-pill" title="Auto-routed by highest remaining quota">Auto-Routed</span>` : ""}
                     ${stagePill}
                     <span class="group-msg-time">${formatShortTime(msg.createdAtMs)}</span>
                     ${statusPill}
@@ -3008,7 +3008,7 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
         <div class="group-header-main">
           <div class="group-header-title-row">
             <h2 class="group-chat-title">${escapeHtml(activeGroup.name)}</h2>
-            <span class="count-badge">${activeGroup.members.length} 位成员</span>
+            <span class="count-badge">${activeGroup.members.length} members</span>
           </div>
           <div class="group-member-bar">
             ${groupByMemberCategory(state, memberEntries)
@@ -3022,10 +3022,10 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
                           ? `data-open-ext-agent-id="${escapeHtml(m.key.uuid)}"`
                           : `data-jump-provider="${escapeHtml(m.key.providerId)}" data-jump-uuid="${escapeHtml(m.key.uuid)}"`;
                         const chipTitle = m.isExternal
-                          ? `点击编辑「${escapeHtml(m.alias)}」直连配置`
+                          ? `Click to edit \\"${escapeHtml(m.alias)}\\" direct config`
                           : m.hasBinding
-                            ? `已绑定群专属会话 · 点击进入「${escapeHtml(m.alias)}」(${escapeHtml(cat.label)}) 页面`
-                            : `点击进入「${escapeHtml(m.alias)}」(${escapeHtml(cat.label)}) 原生会话页`;
+                            ? `Bound to group session · Click to open \\"${escapeHtml(m.alias)}\\" (${escapeHtml(cat.label)})`
+                            : `Click to open \\"${escapeHtml(m.alias)}\\" (${escapeHtml(cat.label)}) native page`;
                         return `
                           <button
                             class="group-member-chip ${m.isNeedsAuth ? "warn" : m.isBusy ? "busy" : m.loggedOut ? "offline" : m.warm ? "warm" : ""}"
@@ -3035,7 +3035,7 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
                           >
                             <span class="group-chip-dot"></span>
                             <span>${escapeHtml(m.alias)}</span>
-                            ${m.hasBinding ? `<span class="group-chip-provider">会话</span>` : ""}
+                            ${m.hasBinding ? `<span class="group-chip-provider">Session</span>` : ""}
                           </button>
                         `;
                       })
@@ -3050,18 +3050,18 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
           ${newTopicConfirmGroupId === activeGroup.id
             ? `
               <div class="new-topic-confirm">
-                <span class="new-topic-confirm-label">开启新话题：</span>
-                <button id="group-new-topic-keep-btn" class="btn primary" type="button" title="清空记录并让网页成员各自新开对话，保留共享上下文与技能">保留共享上下文</button>
-                <button id="group-new-topic-clean-btn" class="btn" type="button" title="清空记录、共享上下文，网页成员各自新开对话（技能与角色保留）">全部清空</button>
-                <button id="group-new-topic-cancel-btn" class="btn" type="button">取消</button>
+                <span class="new-topic-confirm-label">New Topic: </span>
+                <button id="group-new-topic-keep-btn" class="btn primary" type="button" title="Clear chat and start fresh web sessions, keeping shared context & skills">Keep Context</button>
+                <button id="group-new-topic-clean-btn" class="btn" type="button" title="Clear all history and shared context (keeps skills and roles)">Clear All</button>
+                <button id="group-new-topic-cancel-btn" class="btn" type="button">Cancel</button>
               </div>
             `
             : `
-          <button id="group-new-topic-btn" class="btn" type="button" title="清空记录并让所有网页成员新开原生对话，开始一个干净的话题">新话题</button>
-          ${canPinRound ? `<button id="group-pin-round-btn" class="btn knowledge-btn" type="button" title="将最近一轮各成员完成回复浓缩追加至共享上下文">${ICON_PIN}<span>沉淀本轮结论</span></button>` : ""}
-          <button id="group-knowledge-btn" class="btn knowledge-btn" type="button">共享上下文 &amp; 技能${knowledgeCount > 0 ? `<span class="count-badge">${knowledgeCount}</span>` : ""}</button>
-          <button id="group-edit-members-btn" class="btn" type="button">编辑成员</button>
-          <button id="group-clear-msgs-btn" class="btn" type="button" ${activeGroup.messages.length === 0 ? "disabled" : ""}>清空记录</button>
+          <button id="group-new-topic-btn" class="btn" type="button" title="Start a fresh topic with clean web sessions">New Topic</button>
+          ${canPinRound ? `<button id="group-pin-round-btn" class="btn knowledge-btn" type="button" title="Summarize and append latest round replies to shared context">${ICON_PIN}<span>Save Round Summary</span></button>` : ""}
+          <button id="group-knowledge-btn" class="btn knowledge-btn" type="button">Shared Context &amp; Skills ${knowledgeCount > 0 ? `<span class="count-badge">${knowledgeCount}</span>` : ""}</button>
+          <button id="group-edit-members-btn" class="btn" type="button">Edit Members</button>
+          <button id="group-clear-msgs-btn" class="btn" type="button" ${activeGroup.messages.length === 0 ? "disabled" : ""}>Clear Messages</button>
             `}
         </div>
       </div>
@@ -3069,22 +3069,22 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
       <div class="group-composer">
         <div class="group-workflow-bar">
           <div class="workflow-mode-group">
-            <span class="workflow-label">模式</span>
-            <button class="workflow-mode-btn ${workflowMode === "parallel" ? "active" : ""}" data-workflow-mode="parallel" type="button">并行</button>
-            <button class="workflow-mode-btn ${workflowMode === "review" ? "active" : ""}" data-workflow-mode="review" type="button">评审流</button>
-            <button class="workflow-mode-btn ${workflowMode === "a2a_relay" ? "active" : ""}" data-workflow-mode="a2a_relay" type="button">A2A接力</button>
+            <span class="workflow-label">Mode</span>
+            <button class="workflow-mode-btn ${workflowMode === "parallel" ? "active" : ""}" data-workflow-mode="parallel" type="button">Parallel</button>
+            <button class="workflow-mode-btn ${workflowMode === "review" ? "active" : ""}" data-workflow-mode="review" type="button">Review</button>
+            <button class="workflow-mode-btn ${workflowMode === "a2a_relay" ? "active" : ""}" data-workflow-mode="a2a_relay" type="button">A2A Relay</button>
           </div>
           ${workflowMode === "a2a_relay" ? `
             <div class="workflow-hops-group">
-              <span class="workflow-label">接力上限</span>
-              <button class="workflow-hop-btn ${maxRelayHops === 1 ? "active" : ""}" data-relay-hops="1" type="button">1跳</button>
-              <button class="workflow-hop-btn ${maxRelayHops === 2 ? "active" : ""}" data-relay-hops="2" type="button">2跳</button>
-              <button class="workflow-hop-btn ${maxRelayHops === 3 ? "active" : ""}" data-relay-hops="3" type="button">3跳</button>
+              <span class="workflow-label">Max Hops</span>
+              <button class="workflow-hop-btn ${maxRelayHops === 1 ? "active" : ""}" data-relay-hops="1" type="button">1 Hop</button>
+              <button class="workflow-hop-btn ${maxRelayHops === 2 ? "active" : ""}" data-relay-hops="2" type="button">2 Hops</button>
+              <button class="workflow-hop-btn ${maxRelayHops === 3 ? "active" : ""}" data-relay-hops="3" type="button">3 Hops</button>
             </div>
           ` : ""}
         </div>
         <div class="group-target-chips grouped">
-          <button class="group-target-chip ${selectedTargets.length === 0 && selectedAutoIds.length === 0 ? "active" : ""}" data-group-target="all" type="button">全体成员</button>
+          <button class="group-target-chip ${selectedTargets.length === 0 && selectedAutoIds.length === 0 ? "active" : ""}" data-group-target="all" type="button">All Members</button>
           ${targetCategories
             .map((cat) => {
               const allCatSelected =
@@ -3096,16 +3096,16 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
                   ? `<button
                       class="group-target-chip target-auto-chip ${isAutoActive ? "active" : ""}"
                       data-group-target-auto="${escapeHtml(cat.id)}"
-                      title="${escapeHtml(cat.label)} 按剩余额度自动轮换选号（与该类具体 @ 互斥）"
+                      title="${escapeHtml(cat.label)} Auto-select by quota"
                       type="button"
-                    >自动</button>`
+                    >Auto</button>`
                   : "";
               return `
                 <div class="target-category-group">
                   <button
                     class="target-category-badge ${allCatSelected || isAutoActive ? "active" : ""}"
                     data-group-target-cat="${escapeHtml(cat.id)}"
-                    title="${escapeHtml(cat.label)} · 点击全选或取消该类全部成员"
+                    title="${escapeHtml(cat.label)} · Click to toggle all members in this category"
                     aria-label="${escapeHtml(cat.label)}"
                     type="button"
                   >${renderCategoryIcon(state, cat)}</button>
@@ -3146,9 +3146,9 @@ function renderGroupRightStage(state: ManagerSnapshot): string {
               class="group-chat-input"
               rows="2"
               maxlength="4000"
-              placeholder="输入消息，输入 @ 可唤起成员点名（Enter 发送，Shift+Enter 换行）"
+              placeholder="Type a message, type @ to mention members (Enter to send, Shift+Enter for new line)"
             >${escapeHtml(draftVal)}</textarea>
-            <button id="group-send-btn" class="btn primary group-send-btn" type="button" ${groupSending ? "disabled" : ""}>${groupSending ? "发送中…" : "发送"}</button>
+            <button id="group-send-btn" class="btn primary group-send-btn" type="button" ${groupSending ? "disabled" : ""}>${groupSending ? "Sending..." : "Send"}</button>
           </div>
         </div>
       </div>
@@ -3221,14 +3221,14 @@ function render(): void {
     root.innerHTML = `
       <div class="desktop-shell">
         <aside class="service-rail">
-          <div class="rail-brand" title="叠号 · AI 助手账号切换器">
-            <img src="/logos/app-logo.svg" alt="叠号" class="rail-brand-img" draggable="false" />
+          <div class="rail-brand" title="Multi-Agent Account Manager">
+            <img src="/logos/app-logo.svg" alt="Account Manager" class="rail-brand-img" draggable="false" />
           </div>
           <div class="rail-divider"></div>
           <div class="rail-providers">
-            <button id="group-chat-rail-btn" class="rail-btn ${isGroupsView ? "active" : ""}" title="多账号群聊（桌面端）" type="button">
+            <button id="group-chat-rail-btn" class="rail-btn ${isGroupsView ? "active" : ""}" title="Multi-Agent Chat (Desktop)" type="button">
               <div class="rail-logo-box rail-group-icon">${ICON_GROUP}${anyGroupNeedsAuth ? `<span class="warn-dot" aria-hidden="true"></span>` : ""}</div>
-              <span class="rail-label">群聊</span>
+              <span class="rail-label">Chat</span>
             </button>
             <div class="rail-divider"></div>
             ${snapshot.providers
@@ -3237,7 +3237,7 @@ function render(): void {
                 <button class="rail-btn ${!isGroupsView && p.id === provider.id ? "active" : ""} ${!p.enabled ? "disabled" : ""}" data-provider="${escapeHtml(p.id)}" title="${escapeHtml(p.name)}" type="button">
                   <div class="rail-logo-box">${renderProviderLogo(p, "rail-logo-img")}</div>
                   <span class="rail-label">${escapeHtml(p.shortName)}</span>
-                  ${!p.enabled ? `<span class="rail-pending-tag">待接入</span>` : ""}
+                  ${!p.enabled ? `<span class="rail-pending-tag">Coming</span>` : ""}
                 </button>
               `
               )
@@ -3247,26 +3247,26 @@ function render(): void {
             <button
               id="sync-btn"
               class="rail-util-btn"
-              title="跨设备多端加密同步"
+              title="Multi-Device Encrypted Sync"
               type="button"
             >
               ${ICON_SYNC}
-              <span class="rail-util-label">同步</span>
+              <span class="rail-util-label">Sync</span>
             </button>
             <button
               id="settings-btn"
               class="rail-util-btn ${snapshot.globalShortcutError ? "has-warn" : ""}"
-              title="${snapshot.globalShortcutError ? escapeHtml(snapshot.globalShortcutError) : "托盘常驻与全局快捷键设置"}"
+              title="${snapshot.globalShortcutError ? escapeHtml(snapshot.globalShortcutError) : "Tray & Global Shortcut Settings"}"
               type="button"
             >
               ${ICON_SETTINGS}
-              <span class="rail-util-label">设置</span>
+              <span class="rail-util-label">Settings</span>
               ${snapshot.globalShortcutError ? `<span class="warn-dot" aria-hidden="true"></span>` : ""}
             </button>
             <button
               id="theme-toggle-btn"
               class="rail-util-btn"
-              title="外观主题：${themeLabel(themeMode)}（点击切换）"
+              title="Theme: ${themeLabel(themeMode)} (click to toggle)"
               type="button"
             >
               ${themeIcon(themeMode)}
@@ -3275,11 +3275,11 @@ function render(): void {
             <button
               id="check-update-btn"
               class="rail-util-btn ${updateState.result?.hasUpdate ? "has-update" : ""}"
-              title="${updateState.result?.hasUpdate ? `发现新版本 v${escapeHtml(updateState.result.latestVersion)}（点击更新）` : "检查更新"}"
+              title="${updateState.result?.hasUpdate ? `New Version v${escapeHtml(updateState.result.latestVersion)} Available` : "Check for Updates"}"
               type="button"
             >
               ${ICON_UPDATE}
-              <span class="rail-util-label">${updateState.result?.hasUpdate ? "新版本" : "更新"}</span>
+              <span class="rail-util-label">${updateState.result?.hasUpdate ? "New Ver" : "Update"}</span>
               ${updateState.result?.hasUpdate ? `<span class="update-dot" aria-hidden="true"></span>` : ""}
             </button>
           </div>
@@ -3407,7 +3407,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
       if (!msg || !msg.content.trim()) return;
       const prefix =
         msg.role === "user"
-          ? "[用户]"
+          ? "[User]"
           : `[${resolveGroupMessageSenderName(state, msg)}]`;
       await callCommand("append_group_shared_context", {
         groupId: state.activeGroupId,
@@ -3497,10 +3497,10 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
     const round = getLatestRoundCompletedReplies(state, activeGroup);
     if (!round) return;
     const head = round.userText
-      ? `已有结论（议题：${round.userText.replace(/\s+/g, " ").slice(0, 80)}）`
-      : "已有结论";
+      ? `Round Summary (Topic: ${round.userText.replace(/\s+/g, " ").slice(0, 80)}）`
+      : "Round Summary";
     const lines = round.replies.map(
-      (r, i) => `- 观点${i + 1}: ${r.text.replace(/\s+/g, " ").slice(0, 280)}`
+      (r, i) => `- Point ${i + 1}: ${r.text.replace(/\s+/g, " ").slice(0, 280)}`
     );
     const snippet = `${head}\n${lines.join("\n")}`.slice(0, 1800);
     await callCommand("append_group_shared_context", {
@@ -3717,9 +3717,9 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
     const mentionCandidates: MentionCandidate[] = activeGroup
       ? [
           {
-            label: "全体成员",
-            sub: "向全部有效成员转发",
-            insert: "全体成员",
+            label: "All Members",
+            sub: "Forward to all active members",
+            insert: "All Members",
           },
           ...groupByMemberCategory(
             state,
@@ -3733,9 +3733,9 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
               return {
                 label: meta.alias,
                 sub: meta.loggedOut
-                  ? `${cat.label} · 未登录`
+                  ? `${cat.label} · Logged Out`
                   : meta.pageError
-                    ? `${cat.label} · 状态异常`
+                    ? `${cat.label} · Error State`
                     : roleText
                       ? `${cat.label} · ${roleText}`
                       : cat.label,
@@ -4153,7 +4153,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
       });
       if (modal === cur) {
         const kb = Math.max(1, Math.round(res.sizeBytes / 1024));
-        cur.webdavHint = `已加密上传 ${res.accountCount} 个账号（含 ${res.cookieAccountCount} 个登录态，约 ${kb} KB）至 WebDAV`;
+        cur.webdavHint = `Encrypted & uploaded ${res.accountCount} account(s) (${res.cookieAccountCount} with cookies, ~${kb} KB) to WebDAV`;
       }
     } catch (err) {
       if (modal === cur) cur.error = String(err);
@@ -4263,7 +4263,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
       render();
     } catch (err) {
       if (modal !== cur) return;
-      cur.error = `读取备份文件失败: ${String(err)}`;
+      cur.error = `Failed to read backup file: ${String(err)}`;
       render();
     }
   });
@@ -4312,9 +4312,9 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
     if (cur.kind !== "sync" || !cur.lanShareInfo) return;
     try {
       await navigator.clipboard.writeText(cur.lanShareInfo.syncUri);
-      cur.copyHint = "已复制同步串（可在另一台设备地址栏直接粘贴）";
+      cur.copyHint = "Sync string copied (can paste on other device)";
     } catch {
-      cur.copyHint = "复制失败，请手动抄录地址与口令";
+      cur.copyHint = "Copy failed, please copy address & passphrase manually";
     }
     render();
   });
@@ -4332,7 +4332,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
       if (modal !== cur || scanned.cancelled) return;
       const raw = (scanned.content || "").trim();
       if (!raw) {
-        cur.error = "未识别到有效的同步二维码内容";
+        cur.error = "No valid sync QR code content recognized";
         return;
       }
       let parsedAddr = raw;
@@ -4354,7 +4354,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
         cur.lanPullPassDraft = parsedPass;
       }
       if (!parsedPass) {
-        cur.copyHint = "已识别同步地址，请补充输入口令后点击「拉取并合并」";
+        cur.copyHint = "Sync address recognized. Please enter passphrase and click Pull & Merge";
         return;
       }
       cur.lanPullBusy = true;
@@ -4456,9 +4456,9 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
     if (cur.kind !== "sync" || !cur.fileExportResult) return;
     try {
       await navigator.clipboard.writeText(cur.fileExportResult.bundleJson);
-      cur.copyHint = "已复制密文备份内容";
+      cur.copyHint = "Ciphertext backup copied to clipboard";
     } catch {
-      cur.copyHint = "复制失败，请点击保存 .maam 文件";
+      cur.copyHint = "Copy failed, please save .maam file";
     }
     render();
   });
@@ -4500,7 +4500,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
     const best = ranked[0];
     if (!best) {
       if (snapshot) {
-        snapshot = { ...snapshot, notice: "暂无可用在线账号，请先登录或等待同步" };
+        snapshot = { ...snapshot, notice: "No online accounts available. Please log in first." };
         rerenderPreservingScroll();
       }
       return;
@@ -4509,7 +4509,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
       if (snapshot) {
         snapshot = {
           ...snapshot,
-          notice: "当前账号已是可用余量最多的账号",
+          notice: "Current account already has the highest available quota",
         };
         rerenderPreservingScroll();
       }
@@ -4536,7 +4536,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
       if (snapshot) {
         snapshot = {
           ...snapshot,
-          notice: "当前已是按可用余量降序排列",
+          notice: "Accounts already sorted by quota descending",
         };
         rerenderPreservingScroll();
       }
@@ -4653,17 +4653,17 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
       copyingCookies.add(copyKey);
       window.clearTimeout(feedbackTimer);
       button.classList.remove("copied");
-      button.dataset.copyLabel = "复制中…";
+      button.dataset.copyLabel = "Copying...";
       try {
         await invoke<void>("copy_account_cookie", { providerId: provider.id, uuid });
-        button.dataset.copyLabel = "已复制 Cookie";
+        button.dataset.copyLabel = "Copied Cookie";
         button.classList.add("copied");
         feedbackTimer = window.setTimeout(() => {
           button.classList.remove("copied");
-          button.dataset.copyLabel = "复制 Cookie";
+          button.dataset.copyLabel = "Copy Cookie";
         }, 1800);
       } catch (err) {
-        button.dataset.copyLabel = "复制 Cookie";
+        button.dataset.copyLabel = "Copy Cookie";
         if (snapshot?.selectedProviderId === provider.id) {
           snapshot = { ...snapshot, notice: String(err) };
           rerenderPreservingScroll();
@@ -4982,7 +4982,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
     if (currentModal.kind !== "rename" || currentModal.saving || currentModal.cookieImporting) return;
     const raw = (currentModal.cookieDraft ?? "").trim();
     if (!raw) {
-      currentModal.error = "请先粘贴要导入的 Cookie 内容";
+      currentModal.error = "Please paste the cookies to import";
       render();
       return;
     }
@@ -5024,7 +5024,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
         nowChecked = false;
       } else {
         if (modal.selectedMembers.length >= 30) {
-          modal.error = "单个群聊最多支持 30 个成员";
+          modal.error = "A group chat supports up to 30 members";
           rerenderPreservingScroll();
           return;
         }
@@ -5065,7 +5065,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
     const desc = kModal.skillDescDraft.trim();
     const content = kModal.skillContentDraft.trim();
     if (!name || !content) {
-      kModal.error = !name ? "请填写技能名称" : "请填写技能指令内容";
+      kModal.error = !name ? "Please enter skill name" : "Please enter skill prompt content";
       return false;
     }
     if (kModal.editingSkillId) {
@@ -5080,7 +5080,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
       }
     } else {
       if (kModal.skillsDraft.length >= 30) {
-        kModal.error = "单个群聊最多支持 30 个共享技能";
+        kModal.error = "A group chat supports up to 30 shared skills";
         return false;
       }
       kModal.skillsDraft.push({
@@ -5156,7 +5156,7 @@ function bindEvents(state: ManagerSnapshot, provider: ProviderInfo): void {
       if (!preset) return;
       if (modal.skillsDraft.some((s) => s.name === preset.name)) return;
       if (modal.skillsDraft.length >= 30) {
-        modal.error = "单个群聊最多支持 30 个共享技能";
+        modal.error = "A group chat supports up to 30 shared skills";
         render();
         return;
       }

@@ -322,7 +322,7 @@ jobs:
           )
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
-            gh release edit "$RELEASE_TAG" --title "叠号 $RELEASE_TAG" --notes-file "$pub_dir/release-notes.txt"
+            gh release edit "$RELEASE_TAG" --title "Account Manager $RELEASE_TAG" --notes-file "$pub_dir/release-notes.txt"
           else
             extra_args=()
             if [ "${{ github.ref_type }}" != "tag" ]; then
@@ -330,6 +330,6 @@ jobs:
             fi
             gh release create "$RELEASE_TAG" "${files[@]}" \
               "${extra_args[@]}" \
-              --title "叠号 $RELEASE_TAG" \
+              --title "Account Manager $RELEASE_TAG" \
               --notes-file "$pub_dir/release-notes.txt"
           fi
