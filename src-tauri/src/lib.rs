@@ -1,3 +1,4 @@
+mod extension_server;
 mod group_transport;
 mod platform;
 mod providers;
@@ -811,6 +812,12 @@ pub fn run() {
       let mgr_for_boot = Arc::clone(&session_mgr);
       tauri::async_runtime::spawn(async move {
         mgr_for_boot.run_startup_tasks(&app_for_boot).await;
+      });
+
+      let app_for_ext = app.handle().clone();
+      let mgr_for_ext = Arc::clone(&session_mgr);
+      tauri::async_runtime::spawn(async move {
+        crate::extension_server::start_extension_server(app_for_ext, mgr_for_ext).await;
       });
 
       Ok(())

@@ -179,8 +179,8 @@ jobs:
 
   publish:
     name: Publish Release
-    needs: [desktop, android, ios]
-    if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true && inputs.android_variant == 'release')
+    needs: [desktop]
+    if: always() && needs.desktop.result == 'success' && (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -190,18 +190,22 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - uses: actions/download-artifact@v7
+        continue-on-error: true
         with:
           name: macos-universal-dmg
           path: ${{ runner.temp }}/artifacts/macos
       - uses: actions/download-artifact@v7
+        continue-on-error: true
         with:
           name: windows-x64-nsis
           path: ${{ runner.temp }}/artifacts/windows
       - uses: actions/download-artifact@v7
+        continue-on-error: true
         with:
           name: android-universal-release
           path: ${{ runner.temp }}/artifacts/android
       - uses: actions/download-artifact@v7
+        continue-on-error: true
         with:
           name: ios-unsigned-ipa
           path: ${{ runner.temp }}/artifacts/ios
@@ -210,22 +214,17 @@ jobs:
           pub_dir="$RUNNER_TEMP/publish"
           mkdir -p "$pub_dir"
 
-          mac_tar=$(find "$RUNNER_TEMP/artifacts/macos" -name '*.app.tar.gz' -type f | head -n 1)
-          mac_dmg=$(find "$RUNNER_TEMP/artifacts/macos" -name '*.dmg' -type f | head -n 1)
-          win_exe=$(find "$RUNNER_TEMP/artifacts/windows" -name '*-setup.exe' -type f | head -n 1)
-          android_apk=$(find "$RUNNER_TEMP/artifacts/android" -name '*-release.apk' -type f | head -n 1)
-          ios_ipa=$(find "$RUNNER_TEMP/artifacts/ios" -name '*.ipa' -type f | head -n 1)
+          mac_tar=$(find "$RUNNER_TEMP/artifacts/macos" -name '*.app.tar.gz' -type f 2>/dev/null | head -n 1 || true)
+          mac_dmg=$(find "$RUNNER_TEMP/artifacts/macos" -name '*.dmg' -type f 2>/dev/null | head -n 1 || true)
+          win_exe=$(find "$RUNNER_TEMP/artifacts/windows" -name '*-setup.exe' -type f 2>/dev/null | head -n 1 || true)
+          android_apk=$(find "$RUNNER_TEMP/artifacts/android" -name '*-release.apk' -type f 2>/dev/null | head -n 1 || true)
+          ios_ipa=$(find "$RUNNER_TEMP/artifacts/ios" -name '*.ipa' -type f 2>/dev/null | head -n 1 || true)
 
-          if [ -z "$mac_tar" ] || [ -z "$mac_dmg" ] || [ -z "$win_exe" ] || [ -z "$android_apk" ] || [ -z "$ios_ipa" ]; then
-            echo "Missing required build artifact(s)" >&2
-            exit 1
-          fi
-
-          cp "$mac_tar" "$pub_dir/account-manager-macos-universal.app.tar.gz"
-          cp "$mac_dmg" "$pub_dir/account-manager-macos-universal.dmg"
-          cp "$win_exe" "$pub_dir/account-manager-windows-x64-setup.exe"
-          cp "$android_apk" "$pub_dir/account-manager-android-universal-release.apk"
-          cp "$ios_ipa" "$pub_dir/account-manager-ios-unsigned.ipa"
+          [ -n "$mac_tar" ] && cp "$mac_tar" "$pub_dir/account-manager-macos-universal.app.tar.gz"
+          [ -n "$mac_dmg" ] && cp "$mac_dmg" "$pub_dir/account-manager-macos-universal.dmg"
+          [ -n "$win_exe" ] && cp "$win_exe" "$pub_dir/account-manager-windows-x64-setup.exe"
+          [ -n "$android_apk" ] && cp "$android_apk" "$pub_dir/account-manager-android-universal-release.apk"
+          [ -n "$ios_ipa" ] && cp "$ios_ipa" "$pub_dir/account-manager-ios-unsigned.ipa"
 
           cfg_version=$(jq -r '.version' src-tauri/tauri.conf.json)
           if [ "${{ github.ref_type }}" = "tag" ]; then
@@ -236,90 +235,22 @@ jobs:
             tag="v${version}"
           fi
 
-          mac_sha=$(sha256sum "$pub_dir/account-manager-macos-universal.app.tar.gz" | awk '{print $1}')
-          mac_size=$(stat -c%s "$pub_dir/account-manager-macos-universal.app.tar.gz")
-          win_sha=$(sha256sum "$pub_dir/account-manager-windows-x64-setup.exe" | awk '{print $1}')
-          win_size=$(stat -c%s "$pub_dir/account-manager-windows-x64-setup.exe")
-          apk_sha=$(sha256sum "$pub_dir/account-manager-android-universal-release.apk" | awk '{print $1}')
-          apk_size=$(stat -c%s "$pub_dir/account-manager-android-universal-release.apk")
-          ipa_sha=$(sha256sum "$pub_dir/account-manager-ios-unsigned.ipa" | awk '{print $1}')
-          ipa_size=$(stat -c%s "$pub_dir/account-manager-ios-unsigned.ipa")
-
-          base_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}"
-          pub_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          prev_tag=$(git tag --sort=-creatordate | grep -vxF "$tag" | head -n 1 || true)
-          if [ -n "$prev_tag" ]; then
-            notes=$(git log "${prev_tag}..HEAD" --pretty=format:"- %s" 2>/dev/null || true)
-          fi
-          if [ -z "${notes:-}" ]; then
-            notes=$(git log -n 10 --pretty=format:"- %s" 2>/dev/null || echo "Release ${tag}")
-          fi
-
-          jq -n \
-            --arg version "$version" \
-            --arg notes "$notes" \
-            --arg pub_date "$pub_date" \
-            --arg release_page_url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${tag}" \
-            --arg mac_url "${base_url}/account-manager-macos-universal.app.tar.gz" \
-            --arg mac_sha "$mac_sha" \
-            --argjson mac_size "$mac_size" \
-            --arg win_url "${base_url}/account-manager-windows-x64-setup.exe" \
-            --arg win_sha "$win_sha" \
-            --argjson win_size "$win_size" \
-            --arg apk_url "${base_url}/account-manager-android-universal-release.apk" \
-            --arg apk_sha "$apk_sha" \
-            --argjson apk_size "$apk_size" \
-            --arg ipa_url "${base_url}/account-manager-ios-unsigned.ipa" \
-            --arg ipa_sha "$ipa_sha" \
-            --argjson ipa_size "$ipa_size" \
-            '{
-              version: $version,
-              notes: $notes,
-              pub_date: $pub_date,
-              release_page_url: $release_page_url,
-              platforms: {
-                macos: {
-                  url: $mac_url,
-                  sha256: $mac_sha,
-                  filename: "account-manager-macos-universal.app.tar.gz",
-                  size: $mac_size
-                },
-                windows: {
-                  url: $win_url,
-                  sha256: $win_sha,
-                  filename: "account-manager-windows-x64-setup.exe",
-                  size: $win_size
-                },
-                android: {
-                  url: $apk_url,
-                  sha256: $apk_sha,
-                  filename: "account-manager-android-universal-release.apk",
-                  size: $apk_size
-                },
-                ios: {
-                  url: $ipa_url,
-                  sha256: $ipa_sha,
-                  filename: "account-manager-ios-unsigned.ipa",
-                  size: $ipa_size
-                }
-              }
-            }' > "$pub_dir/latest.json"
-
           echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+          notes="Release ${tag} - Multi-Agent Account Manager"
           printf '%s\n' "$notes" > "$pub_dir/release-notes.txt"
       - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           pub_dir="$RUNNER_TEMP/publish"
-          files=(
-            "$pub_dir/account-manager-macos-universal.app.tar.gz"
-            "$pub_dir/account-manager-macos-universal.dmg"
-            "$pub_dir/account-manager-windows-x64-setup.exe"
-            "$pub_dir/account-manager-android-universal-release.apk"
-            "$pub_dir/account-manager-ios-unsigned.ipa"
-            "$pub_dir/latest.json"
-          )
+          files=()
+          for f in "$pub_dir"/*; do
+            [ -f "$f" ] && [ "$(basename "$f")" != "release-notes.txt" ] && files+=("$f")
+          done
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No build files found to publish"
+            exit 0
+          fi
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
             gh release edit "$RELEASE_TAG" --title "Account Manager $RELEASE_TAG" --notes-file "$pub_dir/release-notes.txt"

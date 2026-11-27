@@ -22,6 +22,26 @@ impl ProviderId {
     Self("cli".to_string())
   }
 
+  pub fn claude() -> Self {
+    Self("claude".to_string())
+  }
+
+  pub fn chatgpt() -> Self {
+    Self("chatgpt".to_string())
+  }
+
+  pub fn deepseek() -> Self {
+    Self("deepseek".to_string())
+  }
+
+  pub fn gemini() -> Self {
+    Self("gemini".to_string())
+  }
+
+  pub fn grok() -> Self {
+    Self("grok".to_string())
+  }
+
   pub fn as_str(&self) -> &str {
     &self.0
   }
@@ -32,6 +52,26 @@ impl ProviderId {
 
   pub fn is_hark(&self) -> bool {
     self.0 == "hark"
+  }
+
+  pub fn is_claude(&self) -> bool {
+    self.0 == "claude"
+  }
+
+  pub fn is_chatgpt(&self) -> bool {
+    self.0 == "chatgpt"
+  }
+
+  pub fn is_deepseek(&self) -> bool {
+    self.0 == "deepseek"
+  }
+
+  pub fn is_gemini(&self) -> bool {
+    self.0 == "gemini"
+  }
+
+  pub fn is_grok(&self) -> bool {
+    self.0 == "grok"
   }
 
   pub fn is_api(&self) -> bool {
@@ -48,12 +88,21 @@ impl ProviderId {
   }
 
   pub fn is_builtin(&self) -> bool {
-    self.is_muse() || self.is_hark()
+    self.is_muse() || self.is_hark() || self.is_claude() || self.is_chatgpt() || self.is_deepseek() || self.is_gemini() || self.is_grok()
   }
 
   pub fn parse(value: &str) -> Option<Self> {
     let clean = value.trim().to_ascii_lowercase();
-    if clean == "muse" || clean == "hark" || clean == "api" || clean == "cli" {
+    if clean == "muse"
+      || clean == "hark"
+      || clean == "claude"
+      || clean == "chatgpt"
+      || clean == "deepseek"
+      || clean == "gemini"
+      || clean == "grok"
+      || clean == "api"
+      || clean == "cli"
+    {
       Some(Self(clean))
     } else {
       None
@@ -136,6 +185,70 @@ pub fn builtin_provider_specs() -> Vec<ProviderSpec> {
         "hark.com".to_string(),
         "appleid.apple.com".to_string(),
         "idmsa.apple.com".to_string(),
+      ],
+    },
+    ProviderSpec {
+      info: ProviderInfo {
+        id: ProviderId::claude(),
+        name: "Claude".to_string(),
+        short_name: "Claude".to_string(),
+        enabled: true,
+        status_text: "Enabled".to_string(),
+        entry_url: "https://claude.ai/".to_string(),
+        homepage_url: "https://claude.ai/".to_string(),
+        callback_origins: vec![
+          "https://claude.ai".to_string(),
+          "https://anthropic.com".to_string(),
+        ],
+        verified_methods: vec!["email".to_string(), "google".to_string()],
+      },
+      allowed_hosts: vec![
+        "claude.ai".to_string(),
+        "anthropic.com".to_string(),
+        "accounts.google.com".to_string(),
+      ],
+    },
+    ProviderSpec {
+      info: ProviderInfo {
+        id: ProviderId::chatgpt(),
+        name: "ChatGPT".to_string(),
+        short_name: "ChatGPT".to_string(),
+        enabled: true,
+        status_text: "Enabled".to_string(),
+        entry_url: "https://chatgpt.com/".to_string(),
+        homepage_url: "https://chatgpt.com/".to_string(),
+        callback_origins: vec![
+          "https://chatgpt.com".to_string(),
+          "https://openai.com".to_string(),
+        ],
+        verified_methods: vec!["email".to_string(), "google".to_string(), "microsoft".to_string()],
+      },
+      allowed_hosts: vec![
+        "chatgpt.com".to_string(),
+        "openai.com".to_string(),
+        "auth0.openai.com".to_string(),
+        "accounts.google.com".to_string(),
+      ],
+    },
+    ProviderSpec {
+      info: ProviderInfo {
+        id: ProviderId::deepseek(),
+        name: "DeepSeek".to_string(),
+        short_name: "DeepSeek".to_string(),
+        enabled: true,
+        status_text: "Enabled".to_string(),
+        entry_url: "https://chat.deepseek.com/".to_string(),
+        homepage_url: "https://chat.deepseek.com/".to_string(),
+        callback_origins: vec![
+          "https://chat.deepseek.com".to_string(),
+          "https://deepseek.com".to_string(),
+        ],
+        verified_methods: vec!["email".to_string(), "phone".to_string(), "google".to_string()],
+      },
+      allowed_hosts: vec![
+        "chat.deepseek.com".to_string(),
+        "deepseek.com".to_string(),
+        "accounts.google.com".to_string(),
       ],
     },
   ]

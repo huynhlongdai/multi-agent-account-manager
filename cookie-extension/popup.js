@@ -1,6 +1,24 @@
-// Account Manager Cookie Exporter Popup Script
+// Account Manager Direct Sync Popup Script
 
 const SERVICES = [
+  {
+    id: "chatgpt",
+    name: "ChatGPT",
+    patterns: ["chatgpt.com", "chat.openai.com", "openai.com"],
+    domains: ["chatgpt.com", "openai.com"]
+  },
+  {
+    id: "claude",
+    name: "Claude",
+    patterns: ["claude.ai", "anthropic.com"],
+    domains: ["claude.ai", "anthropic.com"]
+  },
+  {
+    id: "deepseek",
+    name: "DeepSeek",
+    patterns: ["deepseek.com", "chat.deepseek.com"],
+    domains: ["deepseek.com", "chat.deepseek.com"]
+  },
   {
     id: "muse",
     name: "Muse · Meta",
@@ -12,26 +30,85 @@ const SERVICES = [
     name: "Hark",
     patterns: ["hark.com", "app.hark.com"],
     domains: ["hark.com", "app.hark.com"]
-  },
-  {
-    id: "claude",
-    name: "Claude · Anthropic",
-    patterns: ["claude.ai", "anthropic.com"],
-    domains: ["claude.ai", "anthropic.com"]
-  },
-  {
-    id: "chatgpt",
-    name: "ChatGPT · OpenAI",
-    patterns: ["chatgpt.com", "openai.com"],
-    domains: ["chatgpt.com", "openai.com"]
   }
 ];
 
 let currentCookies = [];
 let detectedService = null;
+let appPort = 28888;
+let isAppOnline = false;
+
+async function checkAppConnection() {
+  const connBox = document.getElementById("app-conn-box");
+  const connText = document.getElementById("conn-text");
+  const syncBtn = document.getElementById("direct-sync-btn");
+
+  const ports = [28888, 28889];
+  for (const port of ports) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch(`http://127.0.0.1:${port}/api/status`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        appPort = port;
+        isAppOnline = true;
+        connBox.className = "conn-box online";
+        connText.textContent = `🟢 Connected to Desktop App (v${data.version || "0.2.1"})`;
+        syncBtn.disabled = false;
+        return;
+      }
+    } catch (_) {}
+  }
+
+  isAppOnline = false;
+  connBox.className = "conn-box offline";
+  connText.textContent = "⚪ Desktop App Offline (Open app to 1-Click Sync)";
+  syncBtn.disabled = true;
+}
+
+function extractEmailFromCookies(cookies) {
+  // 1. ChatGPT NextAuth JWT token
+  const nextAuth = cookies.find(c => c.name.includes("session-token"));
+  if (nextAuth && nextAuth.value) {
+    try {
+      const parts = nextAuth.value.split(".");
+      if (parts.length >= 2) {
+        const payloadStr = atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"));
+        const payload = JSON.parse(payloadStr);
+        if (payload?.user?.email) return payload.user.email;
+        if (payload?.email) return payload.email;
+        if (payload?.user?.name) return payload.user.name;
+      }
+    } catch (_) {}
+  }
+
+  // 2. Claude email/user detection
+  const claudeEmail = cookies.find(c => c.name.toLowerCase().includes("email") || c.name === "user_email");
+  if (claudeEmail && claudeEmail.value && claudeEmail.value.includes("@")) {
+    return decodeURIComponent(claudeEmail.value);
+  }
+
+  // 3. Generic email search in cookies
+  for (const c of cookies) {
+    try {
+      const val = decodeURIComponent(c.value);
+      if (val.includes("@") && /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/.test(val.trim())) {
+        return val.trim();
+      }
+    } catch (_) {}
+  }
+
+  return "";
+}
 
 async function init() {
   try {
+    checkAppConnection();
+
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab || !tab.url) {
       showError("Cannot access current tab URL.");
@@ -41,23 +118,21 @@ async function init() {
     const url = new URL(tab.url);
     const host = url.hostname.toLowerCase();
 
-    document.getElementById("tab-url").textContent = url.hostname;
-
     // Detect matched service
     detectedService = SERVICES.find(s => s.patterns.some(p => host.includes(p)));
 
     let targetDomains = [];
+    const badge = document.getElementById("service-badge");
     if (detectedService) {
       targetDomains = detectedService.domains;
-      const badge = document.getElementById("service-badge");
       badge.textContent = detectedService.name;
       badge.classList.add("active-service");
     } else {
-      // Fallback: use root domain and subdomains
       const parts = host.split(".");
       const rootDomain = parts.length > 2 ? parts.slice(-2).join(".") : host;
       targetDomains = [host, rootDomain];
-      document.getElementById("service-badge").textContent = host;
+      badge.textContent = host;
+      detectedService = { id: "generic", name: host, domains: targetDomains };
     }
 
     // Render domain pills
@@ -66,9 +141,21 @@ async function init() {
       .map(d => `<span class="domain-pill">${escapeHtml(d)}</span>`)
       .join("");
 
-    // Fetch cookies across all target domains
+    // Fetch cookies
     currentCookies = await fetchCookiesForDomains(targetDomains);
     document.getElementById("cookie-count").textContent = currentCookies.length;
+
+    // Detect Email / Account Alias
+    const detectedEmail = extractEmailFromCookies(currentCookies);
+    const aliasInput = document.getElementById("account-alias");
+    if (detectedEmail) {
+      aliasInput.value = detectedEmail;
+    } else if (tab.title && !tab.title.includes("http")) {
+      const cleanTitle = tab.title.split(/[-|–—]/)[0].trim();
+      aliasInput.value = cleanTitle || "Active Account";
+    } else {
+      aliasInput.value = "Active Account";
+    }
 
     if (currentCookies.length === 0) {
       showToast("No active login cookies found. Please make sure you are logged in.", "error");
@@ -137,6 +224,53 @@ function showError(msg) {
   showToast(msg, "error");
 }
 
+// 1-Click Direct Sync Handler
+document.getElementById("direct-sync-btn").addEventListener("click", async () => {
+  if (currentCookies.length === 0) {
+    showToast("No cookies to sync. Make sure you are logged in.", "error");
+    return;
+  }
+
+  const syncBtn = document.getElementById("direct-sync-btn");
+  const btnText = document.getElementById("sync-btn-text");
+  const aliasVal = document.getElementById("account-alias").value.trim() || "Active Account";
+  const providerId = detectedService?.id || "chatgpt";
+
+  try {
+    syncBtn.disabled = true;
+    btnText.textContent = "Syncing...";
+
+    const res = await fetch(`http://127.0.0.1:${appPort}/api/sync-account`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        provider: providerId,
+        alias: aliasVal,
+        cookies: currentCookies
+      })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      btnText.textContent = "✓ Synced to App!";
+      showToast(`🎉 ${data.action === "updated" ? "Updated" : "Added"} "${data.alias || aliasVal}" in Account Manager!`);
+      setTimeout(() => {
+        btnText.textContent = "1-Click Sync to App";
+        syncBtn.disabled = false;
+      }, 3000);
+    } else {
+      throw new Error(data.error || "Failed to sync with Desktop App");
+    }
+  } catch (err) {
+    btnText.textContent = "1-Click Sync to App";
+    syncBtn.disabled = false;
+    showToast(`Sync error: ${err.message}`, "error");
+  }
+});
+
+// Fallback Copy to Clipboard
 document.getElementById("copy-btn").addEventListener("click", async () => {
   if (currentCookies.length === 0) {
     showToast("No cookies to copy. Make sure you are logged in.", "error");
@@ -146,31 +280,9 @@ document.getElementById("copy-btn").addEventListener("click", async () => {
   try {
     const jsonStr = JSON.stringify(currentCookies, null, 2);
     await navigator.clipboard.writeText(jsonStr);
-    showToast(`✓ Copied ${currentCookies.length} cookies! Paste in Account Manager.`);
+    showToast(`✓ Copied ${currentCookies.length} cookies to clipboard!`);
   } catch (err) {
-    showError("Failed to copy to clipboard: " + err.message);
-  }
-});
-
-document.getElementById("download-btn").addEventListener("click", () => {
-  if (currentCookies.length === 0) {
-    showToast("No cookies to export.", "error");
-    return;
-  }
-
-  try {
-    const jsonStr = JSON.stringify(currentCookies, null, 2);
-    const blob = new Blob([jsonStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    const serviceTag = detectedService ? detectedService.id : "cookies";
-    a.href = url;
-    a.download = `account-manager-${serviceTag}-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast("✓ Downloaded cookies JSON file!");
-  } catch (err) {
-    showError("Failed to download file: " + err.message);
+    showError("Clipboard copy failed: " + err.message);
   }
 });
 

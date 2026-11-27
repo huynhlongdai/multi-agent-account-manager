@@ -5658,6 +5658,67 @@ impl SessionManager {
     }
   }
 
+  pub async fn import_or_add_account_from_extension(
+    self: &Arc<Self>,
+    app: &AppHandle,
+    raw_provider: &str,
+    raw_alias: &str,
+    raw_cookies: &str,
+  ) -> Result<(String, String), String> {
+    let provider_id = ProviderId::parse(raw_provider)
+      .ok_or_else(|| format!("Unsupported provider: {raw_provider}"))?;
+
+    let trimmed_alias = raw_alias.trim();
+
+    // 1. Try to find existing account with matching alias (case-insensitive) under this provider
+    let existing_match = {
+      let locked = self.inner.lock().await;
+      locked
+        .store
+        .accounts
+        .iter()
+        .find(|a| {
+          a.provider_id == provider_id
+            && !trimmed_alias.is_empty()
+            && a.alias.trim().eq_ignore_ascii_case(trimmed_alias)
+        })
+        .map(|a| (a.uuid.clone(), a.alias.clone()))
+    };
+
+    if let Some((uuid, alias)) = existing_match {
+      self.import_account_cookies(app, raw_provider, &uuid, raw_cookies).await?;
+      return Ok(("updated".to_string(), alias));
+    }
+
+    // 2. Otherwise, create a new account
+    let alias_to_add = if trimmed_alias.is_empty() {
+      "Logged In Account"
+    } else {
+      trimmed_alias
+    };
+
+    let snap = self
+      .add_account(
+        app,
+        raw_provider,
+        alias_to_add,
+        None,
+        None,
+        Some(raw_cookies),
+      )
+      .await?;
+
+    let final_alias = snap
+      .accounts
+      .iter()
+      .filter(|a| a.provider_id == provider_id)
+      .last()
+      .map(|a| a.alias.clone())
+      .unwrap_or_else(|| alias_to_add.to_string());
+
+    Ok(("added".to_string(), final_alias))
+  }
+
   pub async fn remove_account(
     &self,
     app: &AppHandle,
