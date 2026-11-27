@@ -13686,4 +13686,1525 @@ impl SessionManager {
           "请针对「当前问题」给出清晰完整的初始方案与关键依据，请直接在回复正文完整输出内容，不要省略。".to_string()
         } else {
           "请针对「当前问题」给出清晰完整的初始方案与关键依据。".to_string()
-... [truncated for diff preview]
+        };
+        (s, None, None)
+      } else {
+        let full_prev_summary = completed
+          .iter()
+          .enumerate()
+          .map(|(i, (speaker, text))| {
+            let clean_label = if is_hark {
+              format!("草稿要点{}", i + 1)
+            } else if speaker.contains('@') {
+              format!("阶段{}初稿", i + 1)
+            } else {
+              format!("前稿（{speaker}）")
+            };
+            format!("### {clean_label}\n{}", text.trim())
+          })
+          .collect::<Vec<_>>()
+          .join("\n\n");
+
+        let format_with_body = |body: &str| -> String {
+          if is_hark {
+            if stage_label.as_deref() == Some("综合定稿") {
+              format!(
+                "请结合以下待完善方案与修改建议，为我整理输出最终可直接落地的完整结论，请直接在回复正文完整输出内容，不要省略：\n{body}"
+              )
+            } else {
+              format!(
+                "以下是一份待完善的方案要点，请直接为我指出其中的漏洞、边界风险与遗漏并给出具体修改建议，请直接在回复正文完整输出内容，不要省略：\n{body}"
+              )
+            }
+          } else if stage_label.as_deref() == Some("综合定稿") {
+            format!("请结合以下初稿与审阅意见，整合输出最终可直接落地的完整结论：\n{body}")
+          } else {
+            format!("请检查以下初稿中的漏洞、边界风险与遗漏，并给出具体修正建议：\n{body}")
+          }
+        };
+
+        let char_count = full_prev_summary.chars().count();
+        if is_external || char_count <= REVIEW_INLINE_CHAR_LIMIT {
+          (format_with_body(&full_prev_summary), None, None)
+        } else {
+          let filename = format!("review-stage-{pos}.md");
+          let attachment_note = if is_hark {
+            if stage_label.as_deref() == Some("综合定稿") {
+              format!(
+                "请完整阅读我附带的 `{filename}` 文档（内含前期方案与修改建议），为我整理输出最终可直接落地的完整结论，请直接在回复正文完整输出内容，不要省略。"
+              )
+            } else {
+              format!(
+                "请完整阅读我附带的 `{filename}` 文档（内含待完善的方案要点），直接为我指出其中的漏洞、边界风险与遗漏并给出具体修改建议，请直接在回复正文完整输出内容，不要省略。"
+              )
+            }
+          } else if stage_label.as_deref() == Some("综合定稿") {
+            format!(
+              "请完整阅读附件 `{filename}` 中的初稿与审阅意见，整合输出最终可直接落地的完整结论。"
+            )
+          } else {
+            format!(
+              "请完整阅读附件 `{filename}` 中的前期方案内容，检查其中的漏洞、边界风险与遗漏，并给出具体修正建议。"
+            )
+          };
+          let truncated_body: String = full_prev_summary
+            .chars()
+            .take(REVIEW_FALLBACK_CHAR_LIMIT)
+            .collect();
+          let fallback_body = if char_count > REVIEW_FALLBACK_CHAR_LIMIT {
+            format!("{truncated_body}\n...(后续超长内容已略)")
+          } else {
+            truncated_body
+          };
+          (
+            attachment_note,
+            Some(format_with_body(&fallback_body)),
+            Some(GroupAttachment {
+              filename,
+              mime_type: "text/markdown".to_string(),
+              content: full_prev_summary,
+            }),
+          )
+        }
+      };
+
+      let reply_opt = self
+        .run_group_member_turn_with_failover(
+          &app,
+          &group_id,
+          member_key,
+          msg_id,
+          &user_msg_id,
+          &raw_user_content,
+          Some(&stage_inst),
+          fallback_stage_inst.as_deref(),
+          attachment.as_ref(),
+          0,
+          auto_ch.as_ref(),
+        )
+        .await;
+
+      if let Some((actual_key, reply_text)) = reply_opt {
+        let alias = {
+          let locked = self.inner.lock().await;
+          Self::resolve_member_alias_locked(&locked, &actual_key)
+            .unwrap_or_else(|| actual_key.uuid.chars().take(6).collect())
+        };
+        completed.push((alias, reply_text));
+      } else {
+        for (_, _, rem_msg_id, _, _) in &jobs[pos + 1..] {
+          self
+            .update_group_message_state(
+              &app,
+              &group_id,
+              rem_msg_id,
+              GroupReplyStatus::Error,
+              None,
+              Some(Some("前序评审阶段未完成，已中止后续流程".to_string())),
+              true,
+            )
+            .await;
+        }
+        break;
+      }
+    }
+  }
+
+  #[cfg(desktop)]
+  #[allow(clippy::too_many_arguments)]
+  fn run_group_a2a_chain(
+    self: Arc<Self>,
+    app: AppHandle,
+    group_id: String,
+    member_key: AccountKey,
+    msg_id: String,
+    user_msg_id: String,
+    raw_user_content: String,
+    hop_depth: u8,
+    visited: Vec<AccountKey>,
+  ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
+    Box::pin(async move {
+    let stage_hint = if hop_depth > 0 {
+      Some(format!("A2A 接力第 {hop_depth} 跳"))
+    } else {
+      None
+    };
+    let auto_ch = if hop_depth == 0 {
+      let locked = self.inner.lock().await;
+      locked
+        .store
+        .group_chats
+        .iter()
+        .find(|g| g.id == group_id)
+        .and_then(|g| g.messages.iter().find(|m| m.id == msg_id))
+        .and_then(|m| m.auto_routed_channel.as_deref())
+        .and_then(ProviderId::parse)
+    } else {
+      None
+    };
+    let Some((actual_key, reply_text)) = self
+      .run_group_member_turn_with_failover(
+        &app,
+        &group_id,
+        &member_key,
+        &msg_id,
+        &user_msg_id,
+        &raw_user_content,
+        stage_hint.as_deref(),
+        None,
+        None,
+        hop_depth,
+        auto_ch.as_ref(),
+      )
+      .await
+    else {
+      return;
+    };
+
+    if reply_text.trim().is_empty() {
+      return;
+    }
+
+    let mut active_visited = visited;
+    if !active_visited.contains(&actual_key) {
+      active_visited.push(actual_key.clone());
+    }
+
+    let next_hops = {
+      let mut locked = self.inner.lock().await;
+      let Some(g_idx) = locked
+        .store
+        .group_chats
+        .iter()
+        .position(|g| g.id == group_id)
+      else {
+        return;
+      };
+      if locked.store.group_chats[g_idx].workflow_mode != GroupWorkflowMode::A2aRelay
+        || hop_depth >= locked.store.group_chats[g_idx].max_relay_hops.clamp(1, 3)
+      {
+        return;
+      }
+      let eligible_members: Vec<(AccountKey, String)> = locked.store.group_chats[g_idx]
+        .members
+        .iter()
+        .filter_map(|m| {
+          if m.provider_id.is_external() {
+            locked
+              .store
+              .external_agents
+              .iter()
+              .find(|e| &e.account_key() == m)
+              .map(|e| (m.clone(), e.name.clone()))
+          } else {
+            let now = now_ms();
+            locked
+              .store
+              .accounts
+              .iter()
+              .find(|a| a.provider_id == m.provider_id && a.uuid == m.uuid)
+              .filter(|a| a.auth_state != AuthState::LoggedOut && a.cookie_expires_at_ms.is_none_or(|exp| exp > now))
+              .filter(|a| resolve_provider(&a.provider_id).is_some_and(|s| s.info.enabled))
+              .map(|a| (m.clone(), a.alias.clone()))
+          }
+        })
+        .collect();
+
+      let next_targets = Self::select_a2a_relay_targets(
+        &reply_text,
+        &actual_key,
+        &eligible_members,
+        &active_visited,
+        2,
+      );
+      if next_targets.is_empty() {
+        return;
+      }
+
+      let speaker_alias = Self::resolve_member_alias_locked(&locked, &actual_key)
+        .unwrap_or_else(|| actual_key.uuid.chars().take(6).collect());
+      let next_hop = hop_depth + 1;
+      let stage_label = format!("A2A 接力 #{next_hop}");
+      let mut next_visited = active_visited.clone();
+      for k in &next_targets {
+        if !next_visited.contains(k) {
+          next_visited.push(k.clone());
+        }
+      }
+
+      let ts = now_ms();
+      let snippet: String = reply_text.trim().chars().take(600).collect();
+      let relay_prompt = format!(
+        "请接力回应上一跳「{speaker_alias}」的协作结果：\n{snippet}"
+      );
+      let mut spawned = Vec::with_capacity(next_targets.len());
+      for (offset, target_key) in next_targets.into_iter().enumerate() {
+        let alias = Self::resolve_member_alias_locked(&locked, &target_key)
+          .unwrap_or_else(|| target_key.uuid.chars().take(6).collect());
+        let reply_msg_id = Uuid::new_v4().hyphenated().to_string();
+        locked.store.group_chats[g_idx].messages.push(GroupChatMessage {
+          id: reply_msg_id.clone(),
+          role: "assistant".to_string(),
+          sender: Some(target_key.clone()),
+          sender_name: alias,
+          content: String::new(),
+          created_at_ms: ts + (offset as u64) + 1,
+          status: GroupReplyStatus::Queued,
+          targets: Vec::new(),
+          error: None,
+          stage_label: Some(stage_label.clone()),
+          hop_depth: next_hop,
+          auto_routed_channel: None,
+        });
+        spawned.push((target_key, reply_msg_id, relay_prompt.clone(), next_visited.clone()));
+      }
+      if save_store_atomic(&locked.store_path, &locked.store).is_err() {
+        return;
+      }
+      let snap = Self::snapshot_from_locked(&locked);
+      Some((snap, spawned, next_hop))
+    };
+
+    if let Some((snap, spawned, next_hop)) = next_hops {
+      self.emit_snapshot(&app, &snap);
+      for (target_key, new_msg_id, relay_prompt, next_visited) in spawned {
+        let mgr = Arc::clone(&self);
+        let app_h = app.clone();
+        let gid = group_id.clone();
+        let uid = user_msg_id.clone();
+        tauri::async_runtime::spawn(mgr.run_group_a2a_chain(
+          app_h,
+          gid,
+          target_key,
+          new_msg_id,
+          uid,
+          relay_prompt,
+          next_hop,
+          next_visited,
+        ));
+      }
+    }
+    })
+  }
+}
+
+#[cfg(desktop)]
+struct DesktopProbeResult {
+  is_auth: bool,
+  logged_out: bool,
+  stale_session: bool,
+  page_error: String,
+  page_diag: String,
+  typed: String,
+  email: String,
+  display_name: String,
+  avatar: String,
+  quota_text: String,
+  quota_pct: Option<u8>,
+  quota_detail: Option<QuotaDetail>,
+  pending_hotkey: Option<u8>,
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::storage::save_store_atomic;
+
+  fn make_test_account(provider_id: ProviderId, uuid: &str, alias: &str) -> AccountRecord {
+    AccountRecord {
+      provider_id,
+      uuid: uuid.to_string(),
+      alias: alias.to_string(),
+      created_at_ms: 1,
+      auto_alias: false,
+      proxy_url: None,
+      timezone: None,
+      avatar_url: None,
+      quota_text: None,
+      quota_percent: None,
+      quota_detail: None,
+      auth_state: AuthState::Unknown,
+      cookie_expires_at_ms: None,
+      cookie_session_only: false,
+      notes: None,
+    }
+  }
+
+  #[tokio::test]
+  async fn reorder_accounts_updates_only_target_provider_and_validates() {
+    let temp_dir = std::env::temp_dir().join(format!("maam-reorder-test-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let store_path = temp_dir.join("accounts.json");
+
+    let m1 = "00000000-0000-4000-8000-000000000001";
+    let h1 = "00000000-0000-4000-8000-000000000002";
+    let m2 = "00000000-0000-4000-8000-000000000003";
+    let m3 = "00000000-0000-4000-8000-000000000004";
+    let h2 = "00000000-0000-4000-8000-000000000005";
+
+    let initial = AccountsStoreFile {
+      version: crate::storage::STORE_VERSION,
+      accounts: vec![
+        make_test_account(ProviderId::muse(), m1, "m1"),
+        make_test_account(ProviderId::hark(), h1, "h1"),
+        make_test_account(ProviderId::muse(), m2, "m2"),
+        make_test_account(ProviderId::muse(), m3, "m3"),
+        make_test_account(ProviderId::hark(), h2, "h2"),
+      ],
+      last_committed: None,
+      pending_cleanup: Vec::new(),
+      group_chats: Vec::new(),
+      external_agents: Vec::new(),
+      settings: AppSettings::default(),
+    };
+    save_store_atomic(&store_path, &initial).unwrap();
+
+    let mgr = SessionManager::new(temp_dir.clone());
+    let snap = mgr
+      .reorder_accounts("muse", vec![m3.to_string(), m1.to_string(), m2.to_string()])
+      .await
+      .unwrap();
+    let aliases: Vec<&str> = snap.accounts.iter().map(|a| a.alias.as_str()).collect();
+    assert_eq!(aliases, vec!["m3", "h1", "m1", "m2", "h2"]);
+
+    let reloaded = SessionManager::new(temp_dir.clone()).get_snapshot().await;
+    let reloaded_aliases: Vec<&str> = reloaded.accounts.iter().map(|a| a.alias.as_str()).collect();
+    assert_eq!(reloaded_aliases, vec!["m3", "h1", "m1", "m2", "h2"]);
+
+    assert!(mgr
+      .reorder_accounts("muse", vec![m1.to_string(), m2.to_string()])
+      .await
+      .is_err());
+    assert!(mgr
+      .reorder_accounts("muse", vec![m1.to_string(), m1.to_string(), m3.to_string()])
+      .await
+      .is_err());
+    assert!(mgr
+      .reorder_accounts("muse", vec![m1.to_string(), h1.to_string(), m3.to_string()])
+      .await
+      .is_err());
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+  }
+
+  #[test]
+  fn builtin_provider_navigation_policy() {
+    let muse = resolve_provider(&ProviderId::muse()).unwrap();
+    let google_oauth = Url::parse("https://accounts.google.com/o/oauth2/v2/auth").unwrap();
+    assert_eq!(
+      classify_top_level_url(&muse, &google_oauth, false),
+      NavigationDecision::ExternalGoogleOAuth
+    );
+    let http_url = Url::parse("http://muse.ai/").unwrap();
+    assert_eq!(
+      classify_top_level_url(&muse, &http_url, false),
+      NavigationDecision::Deny
+    );
+    let blob_null = Url::parse("blob:null/12345678-90ab-cdef-1234-567890abcdef").unwrap();
+    assert_eq!(
+      classify_top_level_url(&muse, &blob_null, false),
+      NavigationDecision::AllowBlank
+    );
+    let space_asset = Url::parse("https://x.s.metaaiusercontent.com/a").unwrap();
+    assert_eq!(
+      classify_top_level_url(&muse, &space_asset, false),
+      NavigationDecision::AllowHttps
+    );
+    let space_worker = Url::parse("https://app.meta-agents-apps.workers.dev/").unwrap();
+    assert_eq!(
+      classify_top_level_url(&muse, &space_worker, false),
+      NavigationDecision::AllowHttps
+    );
+  }
+
+  #[tokio::test]
+  async fn group_chat_eligibility_and_member_validation() {
+    let temp_dir = std::env::temp_dir().join(format!("maam-group-test-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let store_path = temp_dir.join("accounts.json");
+
+    let valid_uuid = "00000000-0000-4000-8000-000000000101";
+    let expired_uuid = "00000000-0000-4000-8000-000000000102";
+    let logged_out_uuid = "00000000-0000-4000-8000-000000000103";
+
+    let mut valid_acc = make_test_account(ProviderId::muse(), valid_uuid, "Muse1");
+    valid_acc.auth_state = AuthState::Authenticated;
+    valid_acc.cookie_expires_at_ms = Some(now_ms() + 86_400_000);
+
+    let mut expired_acc = make_test_account(ProviderId::hark(), expired_uuid, "HarkExpired");
+    expired_acc.auth_state = AuthState::Authenticated;
+    expired_acc.cookie_expires_at_ms = Some(1_000);
+
+    let mut logged_out_acc = make_test_account(ProviderId::muse(), logged_out_uuid, "Out");
+    logged_out_acc.auth_state = AuthState::LoggedOut;
+
+    let initial = AccountsStoreFile {
+      version: crate::storage::STORE_VERSION,
+      accounts: vec![valid_acc.clone(), expired_acc.clone(), logged_out_acc.clone()],
+      last_committed: None,
+      pending_cleanup: Vec::new(),
+      group_chats: Vec::new(),
+      external_agents: Vec::new(),
+      settings: AppSettings::default(),
+    };
+    save_store_atomic(&store_path, &initial).unwrap();
+
+    let mgr = SessionManager::new(temp_dir.clone());
+    let locked = mgr.inner.lock().await;
+    let valid_key = AccountKey {
+      provider_id: ProviderId::muse(),
+      uuid: valid_uuid.to_string(),
+    };
+    let expired_key = AccountKey {
+      provider_id: ProviderId::hark(),
+      uuid: expired_uuid.to_string(),
+    };
+    let out_key = AccountKey {
+      provider_id: ProviderId::muse(),
+      uuid: logged_out_uuid.to_string(),
+    };
+
+    let deduped = SessionManager::normalize_group_members(
+      &locked,
+      vec![valid_key.clone(), valid_key.clone()],
+      None,
+    )
+    .unwrap();
+    assert_eq!(deduped, vec![valid_key]);
+    assert!(SessionManager::normalize_group_members(&locked, vec![expired_key], None).is_err());
+    assert!(SessionManager::normalize_group_members(&locked, vec![out_key], None).is_err());
+    assert!(SessionManager::normalize_group_members(&locked, vec![], None).is_err());
+
+    drop(locked);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+  }
+
+  #[test]
+  fn parse_at_mentions_resolves_order_longest_match_and_all() {
+    let k1 = AccountKey {
+      provider_id: ProviderId::muse(),
+      uuid: "00000000-0000-4000-8000-000000000001".to_string(),
+    };
+    let k2 = AccountKey {
+      provider_id: ProviderId::muse(),
+      uuid: "00000000-0000-4000-8000-000000000002".to_string(),
+    };
+    let k3 = AccountKey {
+      provider_id: ProviderId::hark(),
+      uuid: "00000000-0000-4000-8000-000000000003".to_string(),
+    };
+    let members = vec![
+      (k1.clone(), "m1".to_string()),
+      (k2.clone(), "m10".to_string()),
+      (k3.clone(), "小脑袋".to_string()),
+    ];
+
+    assert_eq!(
+      SessionManager::parse_at_mentions("test @m10 请和 @小脑袋帮我看看 @m1 @m10", &members),
+      (false, vec![k2.clone(), k3.clone(), k1.clone()])
+    );
+    assert_eq!(
+      SessionManager::parse_at_mentions("email test@m1.com 不应触发", &members),
+      (false, vec![])
+    );
+    assert_eq!(
+      SessionManager::parse_at_mentions("请 @全体成员 给出结论", &members),
+      (true, vec![])
+    );
+    assert_eq!(
+      SessionManager::parse_at_mentions("@all 总结", &members),
+      (true, vec![])
+    );
+  }
+
+  #[cfg(desktop)]
+  #[tokio::test]
+  async fn group_turn_prompt_differential_sync_relay_and_rename() {
+    let temp_dir = std::env::temp_dir().join(format!("maam-group-prompt-test-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let store_path = temp_dir.join("accounts.json");
+
+    let u1 = "00000000-0000-4000-8000-000000000201";
+    let u2 = "00000000-0000-4000-8000-000000000202";
+    let u_removed = "00000000-0000-4000-8000-000000000203";
+
+    let mut a1 = make_test_account(ProviderId::muse(), u1, "架构师-小明");
+    a1.auth_state = AuthState::Authenticated;
+    let mut a2 = make_test_account(ProviderId::hark(), u2, "代码审查-小红");
+    a2.auth_state = AuthState::Authenticated;
+
+    let k1 = AccountKey {
+      provider_id: ProviderId::muse(),
+      uuid: u1.to_string(),
+    };
+    let k2 = AccountKey {
+      provider_id: ProviderId::hark(),
+      uuid: u2.to_string(),
+    };
+    let k_removed = AccountKey {
+      provider_id: ProviderId::muse(),
+      uuid: u_removed.to_string(),
+    };
+
+    let group_id = "grp-prompt-1".to_string();
+    let group = GroupChatRecord {
+      id: group_id.clone(),
+      name: "架构评审群".to_string(),
+      members: vec![k1.clone(), k2.clone()],
+      created_at_ms: 100,
+      shared_context: "核心约束：低内存，禁止写注释".to_string(),
+      shared_skills: vec![
+        GroupSharedSkill {
+          id: "sk1".to_string(),
+          name: "简洁输出".to_string(),
+          description: String::new(),
+          content: "只输出结论与风险".to_string(),
+          enabled: true,
+        },
+        GroupSharedSkill {
+          id: "sk2".to_string(),
+          name: "已禁用".to_string(),
+          description: String::new(),
+          content: "不应注入此条技能".to_string(),
+          enabled: false,
+        },
+      ],
+      member_roles: vec![GroupMemberRole {
+        member: k2.clone(),
+        role: "审查并发与边界条件".to_string(),
+      }],
+      workflow_mode: GroupWorkflowMode::Parallel,
+      max_relay_hops: 2,
+      thread_bindings: Vec::new(),
+      messages: vec![
+        GroupChatMessage {
+          id: "msg-old-removed".to_string(),
+          role: "assistant".to_string(),
+          sender: Some(k_removed),
+          sender_name: "离职成员-旧名".to_string(),
+          content: "历史保留正文内容".to_string(),
+          created_at_ms: 90,
+          status: GroupReplyStatus::Done,
+          targets: Vec::new(),
+          error: None,
+          stage_label: None,
+          hop_depth: 0,
+          auto_routed_channel: None,
+        },
+        GroupChatMessage {
+          id: "msg-u-1".to_string(),
+          role: "user".to_string(),
+          sender: None,
+          sender_name: "我".to_string(),
+          content: "@架构师-小明 @代码审查-小红 请评审".to_string(),
+          created_at_ms: 100,
+          status: GroupReplyStatus::Done,
+          targets: vec![k1.clone(), k2.clone()],
+          error: None,
+          stage_label: None,
+          hop_depth: 0,
+          auto_routed_channel: None,
+        },
+        GroupChatMessage {
+          id: "msg-a-1".to_string(),
+          role: "assistant".to_string(),
+          sender: Some(k1.clone()),
+          sender_name: "架构师-小明".to_string(),
+          content: "建议保持上限 2 并发以控制内存".to_string(),
+          created_at_ms: 101,
+          status: GroupReplyStatus::Done,
+          targets: Vec::new(),
+          error: None,
+          stage_label: None,
+          hop_depth: 0,
+          auto_routed_channel: None,
+        },
+        GroupChatMessage {
+          id: "msg-a-2".to_string(),
+          role: "assistant".to_string(),
+          sender: Some(k2.clone()),
+          sender_name: "代码审查-小红".to_string(),
+          content: String::new(),
+          created_at_ms: 102,
+          status: GroupReplyStatus::Queued,
+          targets: Vec::new(),
+          error: None,
+          stage_label: None,
+          hop_depth: 0,
+          auto_routed_channel: None,
+        },
+      ],
+    };
+
+    let initial = AccountsStoreFile {
+      version: crate::storage::STORE_VERSION,
+      accounts: vec![a1, a2],
+      last_committed: None,
+      pending_cleanup: Vec::new(),
+      group_chats: vec![group],
+      external_agents: Vec::new(),
+      settings: AppSettings::default(),
+    };
+    save_store_atomic(&store_path, &initial).unwrap();
+
+    let mgr = SessionManager::new(temp_dir.clone());
+
+    let (_, _, p1, fp1) = mgr
+      .build_turn_prompt_for_member(
+        &group_id,
+        &k2,
+        11,
+        "msg-a-2",
+        "msg-u-1",
+        "@架构师-小明 @代码审查-小红 请评审",
+        None,
+        0,
+      )
+      .await
+      .unwrap();
+    assert!(p1.contains("请侧重从「审查并发与边界条件」视角回答。"));
+    assert!(p1.contains("参考背景：\n核心约束：低内存，禁止写注释"));
+    assert!(p1.contains("回答要求：\n- 《简洁输出》：只输出结论与风险"));
+    assert!(!p1.contains("不应注入此条技能"));
+    assert!(!p1.contains("[上文纪要]"));
+    assert!(p1.contains("问题：\n请评审"));
+    assert!(!p1.contains("@架构师-小明"));
+    assert!(!p1.contains("协同"));
+    assert!(!p1.contains("分工"));
+
+    let email_members = vec![
+      (k1.clone(), "ldjx7@foxmail.com".to_string()),
+      (k2.clone(), "ldjx.tc@gmail.com".to_string()),
+    ];
+    let stripped = SessionManager::strip_routing_mentions(
+      "@ldjx7@foxmail.com @ldjx.tc@gmail.com 帮我分析一下市面上有哪些渠道可以免费试用DeepSeekv",
+      &email_members,
+    );
+    assert_eq!(stripped, "帮我分析一下市面上有哪些渠道可以免费试用DeepSeekv");
+    assert_eq!(SessionManager::sanitize_history_assistant_text("仍在发送中\n空闲中"), None);
+    assert_eq!(
+      SessionManager::sanitize_history_assistant_text("我不和其他账号的助手一起协作分工，但直接找我能查资料"),
+      Some("直接找我能查资料".to_string())
+    );
+
+    {
+      let mut locked = mgr.inner.lock().await;
+      locked
+        .group_context_synced
+        .insert((group_id.clone(), k2.clone()), (11, fp1));
+    }
+    let (_, _, p2, fp2) = mgr
+      .build_turn_prompt_for_member(&group_id, &k2, 11, "msg-a-2", "msg-u-1", "继续确认", None, 0)
+      .await
+      .unwrap();
+    assert_eq!(fp1, fp2);
+    assert_eq!(p2, "继续确认");
+
+    let (_, _, p3, _) = mgr
+      .build_turn_prompt_for_member(&group_id, &k2, 22, "msg-a-2", "msg-u-1", "重连后继续", None, 0)
+      .await
+      .unwrap();
+    assert!(p3.contains("参考背景：\n核心约束：低内存，禁止写注释"));
+
+    let new_skill = vec![GroupSharedSkill {
+      id: "sk1".to_string(),
+      name: "简洁输出".to_string(),
+      description: String::new(),
+      content: "只输出结论与风险".to_string(),
+      enabled: true,
+    }];
+    let new_roles = vec![GroupMemberRole {
+      member: k2.clone(),
+      role: "审查并发与边界条件".to_string(),
+    }];
+    mgr
+      .update_group_knowledge(
+        group_id.clone(),
+        "新上下文：已通过压力测试".to_string(),
+        new_skill,
+        new_roles,
+      )
+      .await
+      .unwrap();
+    let (_, _, p4, _) = mgr
+      .build_turn_prompt_for_member(&group_id, &k2, 11, "msg-a-2", "msg-u-1", "检查新上下文", None, 0)
+      .await
+      .unwrap();
+    assert!(p4.contains("参考背景：\n新上下文：已通过压力测试"));
+
+    {
+      let mut locked = mgr.inner.lock().await;
+      locked.store.accounts[0].alias = "资深架构-大明".to_string();
+    }
+    let (_, _, p5, _) = mgr
+      .build_turn_prompt_for_member(
+        &group_id,
+        &k2,
+        11,
+        "msg-a-2",
+        "msg-u-1",
+        "复核备注同步",
+        Some("请做交叉评审"),
+        0,
+      )
+      .await
+      .unwrap();
+    assert!(p5.contains("[阶段要求]\n请做交叉评审"));
+    assert!(p5.contains("[背景资料]\n新上下文：已通过压力测试"));
+    assert!(p5.contains("- 已知参考: 建议保持上限 2 并发以控制内存"));
+    assert!(p5.contains("- 已知参考: 历史保留正文内容"));
+    assert!(!p5.contains("资深架构-大明"));
+
+    let (_, _, p5_muse, _) = mgr
+      .build_turn_prompt_for_member(
+        &group_id,
+        &k1,
+        11,
+        "msg-a-2",
+        "msg-u-1",
+        "复核备注同步",
+        Some("请做交叉评审"),
+        0,
+      )
+      .await
+      .unwrap();
+    assert!(p5_muse.contains("- 参考（资深架构-大明）: 建议保持上限 2 并发以控制内存"));
+    assert!(p5_muse.contains("- 参考（离职成员-旧名）: 历史保留正文内容"));
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+  }
+
+  #[cfg(desktop)]
+  #[tokio::test]
+  async fn hybrid_external_agents_a2a_anti_loop_and_thread_bindings() {
+    let temp_dir = std::env::temp_dir().join(format!("maam-hybrid-group-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let mgr = SessionManager::new(temp_dir.clone());
+
+    let api_snap = mgr
+      .upsert_external_agent(
+        None,
+        ExternalAgentKind::OpenaiApi,
+        "DeepSeek-API".to_string(),
+        "https://api.deepseek.com/v1".to_string(),
+        "sk-demo".to_string(),
+        "deepseek-chat".to_string(),
+        String::new(),
+        vec![],
+        None,
+      )
+      .await
+      .expect("create api agent");
+    assert_eq!(api_snap.external_agents.len(), 1);
+    let api_key = api_snap.external_agents[0].account_key();
+
+    let cli_snap = mgr
+      .upsert_external_agent(
+        None,
+        ExternalAgentKind::LocalCli,
+        "ClaudeCLI".to_string(),
+        String::new(),
+        String::new(),
+        String::new(),
+        "claude".to_string(),
+        vec!["-p".to_string()],
+        None,
+      )
+      .await
+      .expect("create cli agent");
+    assert_eq!(cli_snap.external_agents.len(), 2);
+    let cli_key = cli_snap.external_agents[1].account_key();
+
+    let k3 = AccountKey {
+      provider_id: ProviderId::muse(),
+      uuid: "00000000-0000-4000-8000-000000000333".to_string(),
+    };
+    let members = vec![
+      (api_key.clone(), "DeepSeek-API".to_string()),
+      (cli_key.clone(), "ClaudeCLI".to_string()),
+      (k3.clone(), "Muse-C".to_string()),
+    ];
+    let picked = SessionManager::select_a2a_relay_targets(
+      "我先给出初稿，请 @DeepSeek-API 自查无意义，请 @ClaudeCLI 复核，也可问 @Muse-C",
+      &api_key,
+      &members,
+      &[api_key.clone()],
+      2,
+    );
+    assert_eq!(picked, vec![cli_key.clone(), k3.clone()]);
+
+    let visited_blocked = SessionManager::select_a2a_relay_targets(
+      "再交回 @DeepSeek-API 或 @ClaudeCLI",
+      &k3,
+      &members,
+      &[api_key.clone(), cli_key.clone(), k3.clone()],
+      2,
+    );
+    assert!(visited_blocked.is_empty());
+
+    let mut acc = make_test_account(ProviderId::muse(), &k3.uuid, "Muse-C");
+    acc.auth_state = AuthState::Authenticated;
+    {
+      let mut locked = mgr.inner.lock().await;
+      locked.store.accounts.push(acc);
+      locked.store.group_chats.push(GroupChatRecord {
+        id: "g-hybrid-1".to_string(),
+        name: "混合群".to_string(),
+        members: vec![api_key.clone(), cli_key.clone(), k3.clone()],
+        created_at_ms: 1,
+        messages: vec![],
+        shared_context: "背景约束：低功耗".to_string(),
+        shared_skills: vec![],
+        member_roles: vec![],
+        workflow_mode: GroupWorkflowMode::A2aRelay,
+        max_relay_hops: 2,
+        thread_bindings: vec![GroupThreadBinding {
+          member: k3.clone(),
+          thread_url: "https://muse.ai/c/bound-1".to_string(),
+          updated_at_ms: 1,
+        }],
+      });
+    }
+
+    let (sys, usr, full, _) = mgr
+      .build_turn_prompt_for_member("g-hybrid-1", &api_key, 0, "m1", "u1", "开始评审", None, 0)
+      .await
+      .unwrap();
+    assert!(sys.contains("[背景资料]\n背景约束：低功耗"));
+    assert!(usr.contains("[接力标记说明]"));
+    assert!(full.contains("ClaudeCLI"));
+
+    let wf_snap = mgr
+      .update_group_workflow("g-hybrid-1".to_string(), GroupWorkflowMode::Review, 3)
+      .await
+      .unwrap();
+    assert_eq!(wf_snap.group_chats[0].workflow_mode, GroupWorkflowMode::Review);
+    assert_eq!(wf_snap.group_chats[0].max_relay_hops, 3);
+
+    let reset_snap = mgr
+      .reset_group_thread_binding("g-hybrid-1".to_string(), k3.clone())
+      .await
+      .unwrap();
+    assert!(reset_snap.group_chats[0].thread_bindings.is_empty());
+
+    let del_snap = mgr.delete_external_agent(api_key.uuid).await.unwrap();
+    assert_eq!(del_snap.external_agents.len(), 1);
+    assert!(!del_snap.group_chats[0].members.iter().any(|m| m.provider_id.is_api()));
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+  }
+
+  #[tokio::test]
+  async fn evaluate_account_quota_handles_muse_extra_hark_caps_and_remaining_fallback() {
+    let sanitized = SessionManager::sanitize_shared_context_for_prompt(
+      "核心约束：低内存\n[本轮结论汇总 · 可以帮我做什么]\n- a@gmail.com: 回复一\n- b@x.com: 回复二\n- 备注: 保留",
+    );
+    assert_eq!(
+      sanitized,
+      "核心约束：低内存\n已有结论（议题：可以帮我做什么）\n- 观点1: 回复一\n- 观点2: 回复二\n- 备注: 保留"
+    );
+    let mut muse_healthy = make_test_account(
+      ProviderId::muse(),
+      "00000000-0000-4000-8000-000000000401",
+      "Muse-Healthy",
+    );
+    muse_healthy.quota_detail = Some(QuotaDetail {
+      plan_label: "5小时".to_string(),
+      plan_value: "剩余 80%".to_string(),
+      plan_subtext: None,
+      plan_used_percent: Some(20),
+      extra_label: None,
+      extra_value: None,
+      extra_subtext: None,
+      extra_used_percent: None,
+    });
+    let eval_healthy = evaluate_account_quota(&muse_healthy);
+    assert!(!eval_healthy.depleted);
+    assert!(eval_healthy.sticky_ok);
+    assert_eq!(eval_healthy.tier, 0);
+    assert_eq!(eval_healthy.effective_used_pct, 20);
+
+    let mut muse_using_extra = make_test_account(
+      ProviderId::muse(),
+      "00000000-0000-4000-8000-000000000402",
+      "Muse-Extra",
+    );
+    muse_using_extra.quota_detail = Some(QuotaDetail {
+      plan_label: "5小时".to_string(),
+      plan_value: "用尽".to_string(),
+      plan_subtext: None,
+      plan_used_percent: Some(100),
+      extra_label: Some("额外".to_string()),
+      extra_value: Some("剩余 70%".to_string()),
+      extra_subtext: None,
+      extra_used_percent: Some(30),
+    });
+    let eval_extra = evaluate_account_quota(&muse_using_extra);
+    assert!(!eval_extra.depleted);
+    assert_eq!(eval_extra.tier, 1);
+    assert_eq!(eval_extra.effective_used_pct, 30);
+
+    let mut hark_monthly_full = make_test_account(
+      ProviderId::hark(),
+      "00000000-0000-4000-8000-000000000403",
+      "Hark-MonthFull",
+    );
+    hark_monthly_full.quota_detail = Some(QuotaDetail {
+      plan_label: "每日".to_string(),
+      plan_value: "剩余 90%".to_string(),
+      plan_subtext: None,
+      plan_used_percent: Some(10),
+      extra_label: Some("月上限".to_string()),
+      extra_value: Some("已满".to_string()),
+      extra_subtext: None,
+      extra_used_percent: Some(100),
+    });
+    let eval_hark = evaluate_account_quota(&hark_monthly_full);
+    assert!(eval_hark.depleted);
+    assert!(!eval_hark.sticky_ok);
+
+    let mut rem_fallback = make_test_account(
+      ProviderId::muse(),
+      "00000000-0000-4000-8000-000000000404",
+      "Muse-RemFallback",
+    );
+    rem_fallback.quota_percent = Some(10);
+    let eval_rem = evaluate_account_quota(&rem_fallback);
+    assert!(!eval_rem.depleted);
+    assert!(!eval_rem.sticky_ok);
+    assert_eq!(eval_rem.effective_used_pct, 90);
+    assert_eq!(eval_rem.tier, 1);
+  }
+
+  #[tokio::test]
+  async fn auto_channel_routing_sticky_quota_switch_cooldown_and_failover() {
+    let temp_dir = std::env::temp_dir().join(format!("maam-auto-route-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let mgr = SessionManager::new(temp_dir.clone());
+
+    let k1 = AccountKey {
+      provider_id: ProviderId::muse(),
+      uuid: "00000000-0000-4000-8000-000000000501".to_string(),
+    };
+    let k2 = AccountKey {
+      provider_id: ProviderId::muse(),
+      uuid: "00000000-0000-4000-8000-000000000502".to_string(),
+    };
+    let k3 = AccountKey {
+      provider_id: ProviderId::muse(),
+      uuid: "00000000-0000-4000-8000-000000000503".to_string(),
+    };
+
+    let mut a1 = make_test_account(ProviderId::muse(), &k1.uuid, "Muse-1");
+    a1.auth_state = AuthState::Authenticated;
+    a1.quota_percent = Some(60); // 40% used
+    let mut a2 = make_test_account(ProviderId::muse(), &k2.uuid, "Muse-2");
+    a2.auth_state = AuthState::Authenticated;
+    a2.quota_percent = Some(90); // 10% used (highest remaining)
+    let mut a3 = make_test_account(ProviderId::muse(), &k3.uuid, "Muse-3");
+    a3.auth_state = AuthState::Authenticated;
+    a3.quota_percent = Some(0); // depleted
+
+    let mut locked = mgr.inner.lock().await;
+    locked.store.accounts = vec![a1, a2, a3];
+    locked.store.group_chats.push(GroupChatRecord {
+      id: "g-auto-1".to_string(),
+      name: "自动轮换群".to_string(),
+      members: vec![k1.clone(), k2.clone(), k3.clone()],
+      created_at_ms: 1,
+      messages: Vec::new(),
+      shared_context: String::new(),
+      shared_skills: Vec::new(),
+      member_roles: Vec::new(),
+      workflow_mode: GroupWorkflowMode::Parallel,
+      max_relay_hops: 2,
+      thread_bindings: Vec::new(),
+    });
+    let eligible = SessionManager::collect_group_eligible_members_locked(&locked, 0);
+
+    // 首次选择剩余额度最高的 Muse-2
+    let (picked1, _) = SessionManager::select_auto_channel_account_locked(
+      &locked,
+      "g-auto-1",
+      &ProviderId::muse(),
+      &eligible,
+      &[],
+      1_000,
+    )
+    .unwrap();
+    assert_eq!(picked1, k2);
+
+    // 粘性复用：即使 Muse-2 用量涨到 70%（仍 <85%），且 Muse-1 更空闲，仍继续粘性复用 Muse-2
+    locked
+      .group_channel_last_account
+      .insert(("g-auto-1".to_string(), ProviderId::muse()), k2.clone());
+    locked.store.accounts[1].quota_percent = Some(30); // 70% used
+    let (picked_sticky, _) = SessionManager::select_auto_channel_account_locked(
+      &locked,
+      "g-auto-1",
+      &ProviderId::muse(),
+      &eligible,
+      &[],
+      2_000,
+    )
+    .unwrap();
+    assert_eq!(picked_sticky, k2);
+
+    // 阈值切换：Muse-2 用量 >=85% 后自动切换到剩余最多的 Muse-1
+    locked.store.accounts[1].quota_percent = Some(10); // 90% used
+    let (picked_switch, _) = SessionManager::select_auto_channel_account_locked(
+      &locked,
+      "g-auto-1",
+      &ProviderId::muse(),
+      &eligible,
+      &[],
+      3_000,
+    )
+    .unwrap();
+    assert_eq!(picked_switch, k1);
+
+    // 冷却与故障转移排除：Muse-1 进入冷却后，即使 Muse-2 偏低也优先于冷却中的 Muse-1；且耗尽的 Muse-3 不会被选到
+    locked
+      .account_cooldown_until_ms
+      .insert(k1.clone(), 50_000);
+    let (picked_cooldown_avoid, _) = SessionManager::select_auto_channel_account_locked(
+      &locked,
+      "g-auto-1",
+      &ProviderId::muse(),
+      &eligible,
+      &[],
+      4_000,
+    )
+    .unwrap();
+    assert_eq!(picked_cooldown_avoid, k2);
+
+    // 仅剩耗尽账号时返回清晰错误
+    let err = SessionManager::select_auto_channel_account_locked(
+      &locked,
+      "g-auto-1",
+      &ProviderId::muse(),
+      &eligible,
+      &[k1, k2],
+      5_000,
+    )
+    .unwrap_err();
+    assert!(err.contains("耗尽") || err.contains("待授权"));
+
+    drop(locked);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+  }
+
+  #[tokio::test]
+  async fn resolve_group_dispatch_targets_enforces_same_channel_mutual_exclusion() {
+    let temp_dir = std::env::temp_dir().join(format!("maam-auto-mutex-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let mgr = SessionManager::new(temp_dir.clone());
+
+    let m1 = AccountKey {
+      provider_id: ProviderId::muse(),
+      uuid: "00000000-0000-4000-8000-000000000601".to_string(),
+    };
+    let m2 = AccountKey {
+      provider_id: ProviderId::muse(),
+      uuid: "00000000-0000-4000-8000-000000000602".to_string(),
+    };
+    let h1 = AccountKey {
+      provider_id: ProviderId::hark(),
+      uuid: "00000000-0000-4000-8000-000000000603".to_string(),
+    };
+    let h2 = AccountKey {
+      provider_id: ProviderId::hark(),
+      uuid: "00000000-0000-4000-8000-000000000604".to_string(),
+    };
+
+    let mut am1 = make_test_account(ProviderId::muse(), &m1.uuid, "Muse1");
+    am1.auth_state = AuthState::Authenticated;
+    am1.quota_percent = Some(50);
+    let mut am2 = make_test_account(ProviderId::muse(), &m2.uuid, "Muse2");
+    am2.auth_state = AuthState::Authenticated;
+    am2.quota_percent = Some(90);
+    let mut ah1 = make_test_account(ProviderId::hark(), &h1.uuid, "Hark1");
+    ah1.auth_state = AuthState::Authenticated;
+    ah1.quota_percent = Some(20);
+    let mut ah2 = make_test_account(ProviderId::hark(), &h2.uuid, "Hark2");
+    ah2.auth_state = AuthState::Authenticated;
+    ah2.quota_percent = Some(80);
+
+    let mut locked = mgr.inner.lock().await;
+    locked.store.accounts = vec![am1, am2, ah1, ah2];
+    locked.store.group_chats.push(GroupChatRecord {
+      id: "g-mutex-1".to_string(),
+      name: "互斥测试群".to_string(),
+      members: vec![m1.clone(), m2.clone(), h1.clone(), h2.clone()],
+      created_at_ms: 1,
+      messages: Vec::new(),
+      shared_context: String::new(),
+      shared_skills: Vec::new(),
+      member_roles: Vec::new(),
+      workflow_mode: GroupWorkflowMode::Parallel,
+      max_relay_hops: 2,
+      thread_bindings: Vec::new(),
+    });
+    let eligible = SessionManager::collect_group_eligible_members_locked(&locked, 0);
+
+    // 显式点名 @Muse1 + 同时传 auto_channels=["muse", "hark"]：
+    // Muse 渠道与 @Muse1 互斥被过滤；跨渠道的 Hark 自动按最高剩余额度选中 Hark2
+    let routed = SessionManager::resolve_group_dispatch_targets_locked(
+      &mut locked,
+      "g-mutex-1",
+      "@Muse1 请看下",
+      &eligible,
+      Some(vec![m2.clone()]),
+      Some(vec!["muse".to_string(), "hark".to_string()]),
+      10_000,
+    )
+    .unwrap();
+    assert_eq!(routed.len(), 2);
+    assert_eq!(routed[0].0, m1);
+    assert_eq!(routed[0].2, None);
+    assert_eq!(routed[1].0, h2);
+    assert_eq!(routed[1].2, Some(ProviderId::hark()));
+
+    // 无正文 @，仅传 target_members=[Muse1] + auto_channels=["muse", "hark"]
+    let routed_chip = SessionManager::resolve_group_dispatch_targets_locked(
+      &mut locked,
+      "g-mutex-1",
+      "对比这两种实现",
+      &eligible,
+      Some(vec![m1.clone()]),
+      Some(vec!["muse".to_string(), "hark".to_string()]),
+      11_000,
+    )
+    .unwrap();
+    assert_eq!(routed_chip.len(), 2);
+    assert_eq!(routed_chip[0].0, m1);
+    assert_eq!(routed_chip[0].2, None);
+    assert_eq!(routed_chip[1].0, h2);
+    assert_eq!(routed_chip[1].2, Some(ProviderId::hark()));
+
+    drop(locked);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+  }
+
+  #[test]
+  fn clean_reply_text_and_hark_prompt_adaptation() {
+    assert_eq!(
+      SessionManager::clean_extracted_reply_text("Gemini 说\n收到！你好，有什么我可以帮你的吗？"),
+      "收到！你好，有什么我可以帮你的吗？"
+    );
+    assert_eq!(
+      SessionManager::clean_extracted_reply_text("Gemini said: Hello there"),
+      "Hello there"
+    );
+    assert_eq!(
+      SessionManager::clean_extracted_reply_text("Gemini 说"),
+      ""
+    );
+    assert_eq!(
+      SessionManager::clean_extracted_reply_text("Gemini 说的是对的，确实如此。"),
+      "Gemini 说的是对的，确实如此。"
+    );
+
+    assert_eq!(
+      SessionManager::adapt_question_for_hark("各位好，收到请回复"),
+      "你好，收到请回复"
+    );
+    assert_eq!(
+      SessionManager::adapt_question_for_hark("大家觉得这个方案怎么样"),
+      "你觉得这个方案怎么样"
+    );
+    assert_eq!(
+      SessionManager::adapt_question_for_hark("大部分情况不受影响"),
+      "大部分情况不受影响"
+    );
+
+    let hark_ctx = SessionManager::sanitize_shared_context_for_hark(
+      "[本轮结论汇总 · API方案]\n- a@gmail.com: 使用 REST\n- 约束: 低内存",
+    );
+    assert!(hark_ctx.contains("背景要点（API方案）："));
+    assert!(hark_ctx.contains("- 使用 REST"));
+    assert!(!hark_ctx.contains("观点1"));
+  }
+
+  #[tokio::test]
+  async fn page_error_state_tracks_excludes_group_members_and_clears_on_recovery_or_logout() {
+    let temp_dir = std::env::temp_dir().join(format!("maam-page-err-test-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let store_path = temp_dir.join("accounts.json");
+
+    let mut a1 = make_test_account(
+      ProviderId::muse(),
+      "00000000-0000-4000-8000-000000000901",
+      "Muse-Err",
+    );
+    a1.auth_state = AuthState::Authenticated;
+    let mut a2 = make_test_account(
+      ProviderId::muse(),
+      "00000000-0000-4000-8000-000000000902",
+      "Muse-Ok",
+    );
+    a2.auth_state = AuthState::Authenticated;
+
+    let k1 = AccountKey {
+      provider_id: a1.provider_id.clone(),
+      uuid: a1.uuid.clone(),
+    };
+    let k2 = AccountKey {
+      provider_id: a2.provider_id.clone(),
+      uuid: a2.uuid.clone(),
+    };
+
+    let initial = AccountsStoreFile {
+      version: crate::storage::STORE_VERSION,
+      accounts: vec![a1, a2],
+      last_committed: None,
+      pending_cleanup: Vec::new(),
+      group_chats: vec![GroupChatRecord {
+        id: "g-err-1".to_string(),
+        name: "异常状态测试群".to_string(),
+        members: vec![k1.clone(), k2.clone()],
+        created_at_ms: 1,
+        messages: vec![],
+        shared_context: String::new(),
+        shared_skills: vec![],
+        member_roles: vec![],
+        workflow_mode: GroupWorkflowMode::Parallel,
+        max_relay_hops: 2,
+        thread_bindings: vec![],
+      }],
+      external_agents: Vec::new(),
+      settings: AppSettings::default(),
+    };
+    save_store_atomic(&store_path, &initial).unwrap();
+
+    let mgr = SessionManager::new(temp_dir.clone());
+    let vid = 42u64;
+    let mut locked = mgr.inner.lock().await;
+    #[cfg(desktop)]
+    locked.warm_pool.insert(
+      k1.clone(),
+      WarmDesktopEntry {
+        account_key: k1.clone(),
+        view_instance_id: vid,
+        webview_label: "wv-err-test".to_string(),
+        popup_label: None,
+        paint_ready: true,
+        staged_painted: true,
+        navigation_reached: true,
+        load_gen: Arc::new(AtomicU64::new(1)),
+        last_url: None,
+        captured_identity_hint: None,
+        watcher_running: false,
+        probe_notify: Arc::new(tokio::sync::Notify::new()),
+        last_used_ms: 1,
+        alive_flag: Arc::new(AtomicBool::new(true)),
+      },
+    );
+    #[cfg(not(desktop))]
+    {
+      locked.active_slot = Some(ActiveSessionSlot {
+        account_key: k1.clone(),
+        view_instance_id: vid,
+        switch_seq: 1,
+        committed: true,
+      });
+    }
+
+    let snap_err = SessionManager::apply_page_error_state_locked(
+      &mut locked,
+      k1.clone(),
+      vid,
+      "页面出错，请检查代理或清理重登",
+    )
+    .expect("should emit snapshot on page error");
+    assert_eq!(snap_err.account_errors.len(), 1);
+    assert_eq!(snap_err.account_errors[0].uuid, k1.uuid);
+    assert_eq!(
+      snap_err.account_errors[0].message,
+      "页面出错，请检查代理或清理重登"
+    );
+
+    let eligible = SessionManager::collect_group_eligible_members_locked(&locked, 0);
+    assert_eq!(eligible, vec![(k2.clone(), "Muse-Ok".to_string())]);
+
+    let (snap_recovered, became_auth, _, _) = SessionManager::apply_detected_metadata_locked(
+      &mut locked,
+      &k1,
+      vid,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+    );
+    assert!(!became_auth);
+    let snap_recovered = snap_recovered.expect("should emit snapshot when clearing page error");
+    assert!(snap_recovered.account_errors.is_empty());
+    assert_eq!(
+      SessionManager::collect_group_eligible_members_locked(&locked, 0).len(),
+      2
+    );
+
+    SessionManager::apply_page_error_state_locked(
+      &mut locked,
+      k1.clone(),
+      vid,
+      "登录态异常，请退出或清理重登",
+    )
+    .expect("re-insert page error");
+    let snap_logged_out = SessionManager::apply_logged_out_state_locked(&mut locked, &k1, vid)
+      .expect("should emit snapshot when transitioning to logged_out");
+    assert!(snap_logged_out.account_errors.is_empty());
+    assert_eq!(
+      snap_logged_out
+        .accounts
+        .iter()
+        .find(|a| a.uuid == k1.uuid)
+        .unwrap()
+        .auth_state,
+      AuthState::LoggedOut
+    );
+
+    let _ = SessionManager::apply_page_error_state_locked(
+      &mut locked,
+      k1.clone(),
+      vid,
+      "二次异常",
+    )
+    .expect("insert page error while already logged out");
+    let snap_still_logged_out =
+      SessionManager::apply_logged_out_state_locked(&mut locked, &k1, vid)
+        .expect("clearing error on already logged_out account must still emit snapshot");
+    assert!(snap_still_logged_out.account_errors.is_empty());
+
+    drop(locked);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+  }
+
+  #[tokio::test]
+  async fn soft_identity_upgrades_to_strong_email_and_reverts_placeholder_on_logout() {
+    let temp_dir = std::env::temp_dir().join(format!("maam-soft-id-test-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let store_path = temp_dir.join("accounts.json");
+
+    let mut acc = make_test_account(
+      ProviderId::muse(),
+      "00000000-0000-4000-8000-000000000903",
+      "待登录账号",
+    );
+    acc.auto_alias = true;
+    acc.auth_state = AuthState::Unknown;
+
+    let key = AccountKey {
+      provider_id: acc.provider_id.clone(),
+      uuid: acc.uuid.clone(),
+    };
+
+    let initial = AccountsStoreFile {
+      version: crate::storage::STORE_VERSION,
+      accounts: vec![acc],
+      last_committed: None,
+      pending_cleanup: Vec::new(),
+      group_chats: Vec::new(),
+      external_agents: Vec::new(),
+      settings: AppSettings::default(),
+    };
+    save_store_atomic(&store_path, &initial).unwrap();
+
+    let mgr = SessionManager::new(temp_dir.clone());
+    let vid = 77u64;
+    let mut locked = mgr.inner.lock().await;
+    #[cfg(desktop)]
+    locked.warm_pool.insert(
+      key.clone(),
+      WarmDesktopEntry {
+        account_key: key.clone(),
+        view_instance_id: vid,
+        webview_label: "wv-soft-test".to_string(),
+        popup_label: None,
+        paint_ready: true,
+        staged_painted: true,
+        navigation_reached: true,
+        load_gen: Arc::new(AtomicU64::new(1)),
+        last_url: None,
+        captured_identity_hint: None,
+        watcher_running: false,
+        probe_notify: Arc::new(tokio::sync::Notify::new()),
+        last_used_ms: 1,
+        alive_flag: Arc::new(AtomicBool::new(true)),
+      },
+    );
+    #[cfg(not(desktop))]
+    {
+      locked.active_slot = Some(ActiveSessionSlot {
+        account_key: key.clone(),
+        view_instance_id: vid,
+        switch_seq: 1,
+        committed: true,
+      });
+    }
+
+    // 1. Soft fallback updates alias to "已登录账号" while keeping auto_alias = true.
+    let (snap1, became_auth1, _, _) = SessionManager::apply_detected_metadata_locked(
+      &mut locked,
+      &key,
+      vid,
+      None,
+      Some("已登录账号".to_string()),
+      None,
+      None,
+      None,
+      None,
+    );
+    assert!(became_auth1);
+    assert!(snap1.is_some());
+    assert_eq!(locked.store.accounts[0].alias, "已登录账号");
+    assert!(locked.store.accounts[0].auto_alias);
+
+    // 2. Display name replaces generic "已登录账号" while still keeping auto_alias = true.
+    let (snap2, _, _, _) = SessionManager::apply_detected_metadata_locked(
+      &mut locked,
+      &key,
+      vid,
+      None,
+      Some("Alice Meta".to_string()),
+      None,
+      None,
+      None,
+      None,
+    );
+    assert!(snap2.is_some());
+    assert_eq!(locked.store.accounts[0].alias, "Alice Meta");
+    assert!(locked.store.accounts[0].auto_alias);
+
+    // 3. Strong email overrides soft identity and clears auto_alias.
+    let (snap3, _, _, _) = SessionManager::apply_detected_metadata_locked(
+      &mut locked,
+      &key,
+      vid,
+      Some("alice@gmail.com".to_string()),
+      None,
+      None,
+      None,
+      None,
+      None,
+    );
+    assert!(snap3.is_some());
+    assert_eq!(locked.store.accounts[0].alias, "alice@gmail.com");
+    assert!(!locked.store.accounts[0].auto_alias);
+
+    // 4. Logout on a soft-fallback placeholder reverts "已登录账号" -> "待登录账号".
+    locked.store.accounts[0].alias = "已登录账号".to_string();
+    locked.store.accounts[0].auto_alias = true;
+    let snap_out = SessionManager::apply_logged_out_state_locked(&mut locked, &key, vid)
+      .expect("logout should emit snapshot");
+    let out_acc = &snap_out.accounts[0];
+    assert_eq!(out_acc.auth_state, AuthState::LoggedOut);
+    assert_eq!(out_acc.alias, "待登录账号");
+    assert!(out_acc.auto_alias);
+
+    drop(locked);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+  }
+}
